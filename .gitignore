@@ -1,6 +1,6 @@
-/target
+crate/target
 **/*.rs.bk
-Cargo.lock
+crate/Cargo.lock
 bin/
 pkg/
 dist/

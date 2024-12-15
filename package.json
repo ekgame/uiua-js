@@ -10,6 +10,8 @@
   "author": "ekgame",
   "license": "MIT",
   "devDependencies": {
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "vite-plugin-top-level-await": "^1.4.4",
+    "vite-plugin-wasm-pack": "^0.1.12"
   }
 }

@@ -1,4 +1,4 @@
-import init, { format_internal, FormatConfigStruct } from '../pkg/uiua_js';
+import init, { format_internal, FormatConfigStruct } from '../crate/pkg/uiua_js';
 
 // @ts-ignore
 await init();

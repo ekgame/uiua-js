@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use uiua::format::{format_str, FormatConfig, FormatOutput};
-use uiua::{CodeSpan, Loc};
+use uiua::{CodeSpan, Loc, Uiua, Value};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "wee_alloc")]
@@ -133,9 +133,11 @@ impl From<FormatOutput> for FormatOutputStruct {
     fn from(output: FormatOutput) -> Self {
         FormatOutputStruct {
             output: output.output,
-            glyph_map: output.glyph_map.iter().map(|(span, locs)| {
-                GlyphMapping::from((span, *locs))
-            }).collect(),
+            glyph_map: output
+                .glyph_map
+                .iter()
+                .map(|(span, locs)| GlyphMapping::from((span, *locs)))
+                .collect(),
         }
     }
 }
@@ -167,4 +169,36 @@ pub fn format_internal(code: String, config: FormatConfigStruct) -> Result<JsVal
     let format_output = format_str(&*code, &format_config)?;
     let output = FormatOutputStruct::from(format_output);
     Ok(serde_wasm_bindgen::to_value(&output)?)
+}
+
+#[derive(Serialize, Deserialize)]
+struct UiuaArray<T> {
+    data: Vec<T>,
+    shape: Vec<usize>,
+    label: Option<String>,
+    keys: UiuaValue,
+}
+
+#[derive(Serialize, Deserialize)]
+enum UiuaValue {
+    Byte(UiuaArray<u8>),
+    Num(UiuaArray<f64>),
+    Char(UiuaArray<char>),
+    Complex(UiuaArray<(f64, f64)>),
+    Box(UiuaArray<UiuaValue>),
+}
+
+#[wasm_bindgen]
+pub fn test_run(code: String) -> Result<JsValue, JsError> {
+    let mut uiua = Uiua::with_safe_sys();
+    let result = uiua.compile_run(|comp| comp.print_diagnostics(true).load_str(&*code));
+
+    if let Err(_) = result {
+        return Err(JsError::new("uh, something went wrong"));
+    }
+
+    // let values = uiua.stack().iter().map(|value| value_to_js_value(value));
+    // Ok(JsValue::from(values.collect::<js_sys::Array>()))
+
+    Ok(serde_wasm_bindgen::to_value(&uiua.stack())?)
 }

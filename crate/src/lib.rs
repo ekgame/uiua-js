@@ -1,7 +1,7 @@
+use serde::ser::{Serialize, SerializeStruct, Serializer};
 use uiua::format::{format_str, FormatConfig, FormatOutput};
-use uiua::{CodeSpan, Loc, Uiua, Value};
+use uiua::{CodeSpan, InputSrc, Inputs, Loc, Uiua, Value};
 use wasm_bindgen::prelude::*;
-use serde::ser::{Serialize, Serializer, SerializeStruct};
 
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
@@ -192,43 +192,43 @@ impl Serialize for UiuaValue {
         S: Serializer,
     {
         let mut struct_ser = serializer.serialize_struct("UiuaArray", 4)?;
-        
+
         match self {
             UiuaValue::Byte(array) => {
                 struct_ser.serialize_field("data", &array.data)?;
                 struct_ser.serialize_field("shape", &array.shape)?;
                 struct_ser.serialize_field("label", &array.label)?;
                 struct_ser.serialize_field("keys", &array.keys)?;
-                struct_ser.serialize_field("boxed", &false)?;
-            },
+                struct_ser.serialize_field("type", &"number")?;
+            }
             UiuaValue::Num(array) => {
                 struct_ser.serialize_field("data", &array.data)?;
                 struct_ser.serialize_field("shape", &array.shape)?;
                 struct_ser.serialize_field("label", &array.label)?;
                 struct_ser.serialize_field("keys", &array.keys)?;
-                struct_ser.serialize_field("boxed", &false)?;
-            },
+                struct_ser.serialize_field("type", &"number")?;
+            }
             UiuaValue::Char(array) => {
                 struct_ser.serialize_field("data", &array.data.iter().collect::<String>())?;
                 struct_ser.serialize_field("shape", &array.shape)?;
                 struct_ser.serialize_field("label", &array.label)?;
                 struct_ser.serialize_field("keys", &array.keys)?;
-                struct_ser.serialize_field("boxed", &false)?;
-            },
+                struct_ser.serialize_field("type", &"char")?;
+            }
             UiuaValue::Complex(array) => {
                 struct_ser.serialize_field("data", &array.data)?;
                 struct_ser.serialize_field("shape", &array.shape)?;
                 struct_ser.serialize_field("label", &array.label)?;
                 struct_ser.serialize_field("keys", &array.keys)?;
-                struct_ser.serialize_field("boxed", &false)?;
-            },
+                struct_ser.serialize_field("type", &"complex")?;
+            }
             UiuaValue::Box(array) => {
                 struct_ser.serialize_field("data", &array.data)?;
                 struct_ser.serialize_field("shape", &array.shape)?;
                 struct_ser.serialize_field("label", &array.label)?;
                 struct_ser.serialize_field("keys", &array.keys)?;
-                struct_ser.serialize_field("boxed", &true)?;
-            },
+                struct_ser.serialize_field("type", &"box")?;
+            }
         }
 
         struct_ser.end()
@@ -242,46 +242,74 @@ impl From<Value> for UiuaValue {
                 data: array.elements().cloned().collect(),
                 shape: array.shape().to_vec(),
                 label: array.meta().label.as_ref().map(|s| s.to_string()),
-                keys: array.meta().map_keys.as_ref().map(|keys| Box::new(keys.normalized_keys().into())),
+                keys: array
+                    .meta()
+                    .map_keys
+                    .as_ref()
+                    .map(|keys| Box::new(keys.normalized_keys().into())),
             }),
             Value::Num(array) => UiuaValue::Num(UiuaArray {
                 data: array.elements().cloned().collect(),
                 shape: array.shape().to_vec(),
                 label: array.meta().label.as_ref().map(|s| s.to_string()),
-                keys: array.meta().map_keys.as_ref().map(|keys| Box::new(keys.normalized_keys().into())),
+                keys: array
+                    .meta()
+                    .map_keys
+                    .as_ref()
+                    .map(|keys| Box::new(keys.normalized_keys().into())),
             }),
             Value::Char(array) => UiuaValue::Char(UiuaArray {
                 data: array.elements().cloned().collect(),
                 shape: array.shape().to_vec(),
                 label: array.meta().label.as_ref().map(|s| s.to_string()),
-                keys: array.meta().map_keys.as_ref().map(|keys| Box::new(keys.normalized_keys().into())),
+                keys: array
+                    .meta()
+                    .map_keys
+                    .as_ref()
+                    .map(|keys| Box::new(keys.normalized_keys().into())),
             }),
             Value::Complex(array) => UiuaValue::Complex(UiuaArray {
                 data: array.elements().map(|c| (c.re, c.im)).collect(),
                 shape: array.shape().to_vec(),
                 label: array.meta().label.as_ref().map(|s| s.to_string()),
-                keys: array.meta().map_keys.as_ref().map(|keys| Box::new(keys.normalized_keys().into())),
+                keys: array
+                    .meta()
+                    .map_keys
+                    .as_ref()
+                    .map(|keys| Box::new(keys.normalized_keys().into())),
             }),
             Value::Box(array) => UiuaValue::Box(UiuaArray {
-                data: array.elements().map(|v| Box::new(UiuaValue::from(v.0.clone()))).collect(),
+                data: array
+                    .elements()
+                    .map(|v| Box::new(UiuaValue::from(v.0.clone())))
+                    .collect(),
                 shape: array.shape().to_vec(),
                 label: array.meta().label.as_ref().map(|s| s.to_string()),
-                keys: array.meta().map_keys.as_ref().map(|keys| Box::new(keys.normalized_keys().into())),
+                keys: array
+                    .meta()
+                    .map_keys
+                    .as_ref()
+                    .map(|keys| Box::new(keys.normalized_keys().into())),
             }),
         }
     }
-    
 }
 
+
 #[wasm_bindgen]
-pub fn test_run(code: String) -> Result<JsValue, JsError> {
+pub fn test_run(code: String) -> Result<JsValue, JsValue> {
     let mut uiua = Uiua::with_safe_sys();
     let result = uiua.compile_run(|comp| comp.print_diagnostics(true).load_str(&*code));
 
-    if let Err(_) = result {
-        return Err(JsError::new("uh, something went wrong"));
+    if let Err(err) = result {
+        return Err(JsError::from(err).into());
     }
 
-    let values = uiua.stack().iter().map(|value| UiuaValue::from(value.clone())).collect::<Vec<UiuaValue>>();
+    let values = uiua
+        .stack()
+        .iter()
+        .map(|value| UiuaValue::from(value.clone()))
+        .collect::<Vec<UiuaValue>>();
+
     Ok(serde_wasm_bindgen::to_value(&values)?)
 }

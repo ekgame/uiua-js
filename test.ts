@@ -26,4 +26,13 @@ import { format, test, getShape } from "./lib/main";
 
 // console.log(flattenArray([[[1], [2], [3]], [[4], [5], [6]]]))
 
-console.log(test(`$asd map {"1 hello world" "2 test" "3 foo"} {"1 universe" "2 pog" "3 bar"}`));
+// console.log(test(`$asd map {"1 hello world" "2 test" "3 foo"} {"1 universe" "2 pog" "3 bar"}`));
+// console.log(test(`range10`));
+// console.log(test(`↯2_2≡(ℂ°⊟)↯∞_2⇡10`));
+// console.log(JSON.stringify(test(`↯2_3_4 ⇡100`)[0].data));
+console.log(test(`
+    map {} {}
+    insert∩□ "hello" "world"
+    insert∩□ "range" ⇡10
+    insert∩□ "reshape" ↯1_2_3_4⇡10
+`));

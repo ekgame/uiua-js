@@ -78,31 +78,36 @@ export function format(
   };
 }
 
-export type UiuaArray<T> =
-  | T
-  | T[]
-  | T[][]
-  | T[][][]
-  | T[][][][]
-  | T[][][][][]
-  | T[][][][][][]
-  | T[][][][][][][]
-  | T[][][][][][][][]
-  | T[][][][][][][][][]; // lmao, I hope this is enough
+interface UiuaArray<T> extends Array<T | UiuaArray<T>> {}
 
-export interface Box {
-  value: UiuaValue;
+interface UiuaValueBase {
+  type: 'number' | 'char' | 'box' | 'complex'
+  shape: number[]
+  label: string|null
+  keys: UiuaValue|null
 }
 
-export interface ArrayMeta {
-  label: string | null;
-  keys: UiuaValue | null;
+interface UiuaValueNumber extends UiuaValueBase {
+  type: 'number'
+  data: UiuaArray<number>
 }
 
-export interface UiuaValue {
-  data: UiuaArray<any>;
-  meta: ArrayMeta;
+interface UiuaValueChar extends UiuaValueBase {
+  type: 'char'
+  data: UiuaArray<string>
 }
+
+interface UiuaValueComplex extends UiuaValueBase {
+  type: 'complex'
+  data: UiuaArray<[number, number]>
+}
+
+interface UiuaValueBox extends UiuaValueBase {
+  type: 'box'
+  data: UiuaArray<UiuaValue>
+}
+
+type UiuaValue = UiuaValueNumber | UiuaValueChar | UiuaValueComplex | UiuaValueBox
 
 export function getShape(item: any): number[] | null {
   if (typeof item === "number" || typeof item === "boolean") {
@@ -163,20 +168,51 @@ function flattenArray<T>(arr: UiuaArray<T>): T[] {
   }, []);
 }
 
-interface InternalUiuaValue {
-    data: any;
-    shape: number[];
-    label: string | null;
-    keys: InternalUiuaValue | null;
+function reshapeArray(array: any[], shape: number[], type: string): any[] {
+  let index = 0;
+
+  function nest(currentShape: number[]) {
+    if (currentShape.length === 0) {
+      return array[index++];
+    }
+
+    const size = currentShape[0];
+    const restShape = currentShape.slice(1);
+    if (type == 'char' && restShape.length === 0) {
+      array as unknown as string;
+      const result = array.slice(index, index + size);
+      index += size;
+      return result;
+    }
+
+    const result: any[] = [];
+
+    for (let i = 0; i < size; i++) {
+      result.push(nest(restShape));
+    }
+
+    return result;
+  }
+
+  return nest(shape);
 }
 
-export function createUiuaValue(
-  array: UiuaArray<number | boolean | string | Box>,
-  config: Partial<ArrayMeta>,
-) {
+function formatResult(result: any): UiuaValue {
+  let data = result.data;
 
+  if (result.type === "box") {
+    data = data.map(formatResult);
+  }
+
+  return {
+    data: reshapeArray(data, result.shape, result.type),
+    shape: result.shape,
+    label: result.label || null,
+    keys: result.keys ? formatResult(result.keys) : null,
+    type: result.type,
+  };
 }
 
 export function test(code: string) {
-    return test_run(code);
+    return test_run(code).map(formatResult);
 }

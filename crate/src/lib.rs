@@ -1,13 +1,13 @@
-use serde::{Deserialize, Serialize};
 use uiua::format::{format_str, FormatConfig, FormatOutput};
 use uiua::{CodeSpan, Loc, Uiua, Value};
 use wasm_bindgen::prelude::*;
+use serde::ser::{Serialize, Serializer, SerializeStruct};
 
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 #[wasm_bindgen]
 pub struct FormatConfigStruct {
     trailing_newline: Option<bool>,
@@ -50,7 +50,7 @@ impl FormatConfigStruct {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct DocumentLocation {
     pub line: u16,
     pub column: u16,
@@ -72,7 +72,7 @@ impl DocumentLocation {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct DocumentSpan {
     pub from: DocumentLocation,
     pub to: DocumentLocation,
@@ -105,7 +105,7 @@ impl From<Loc> for DocumentLocation {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct GlyphMapping {
     pub span_from: DocumentSpan,
     pub span_to: DocumentSpan,
@@ -123,7 +123,7 @@ impl From<(&CodeSpan, (Loc, Loc))> for GlyphMapping {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct FormatOutputStruct {
     pub output: String,
     pub glyph_map: Vec<GlyphMapping>,
@@ -171,21 +171,106 @@ pub fn format_internal(code: String, config: FormatConfigStruct) -> Result<JsVal
     Ok(serde_wasm_bindgen::to_value(&output)?)
 }
 
-#[derive(Serialize, Deserialize)]
 struct UiuaArray<T> {
     data: Vec<T>,
     shape: Vec<usize>,
     label: Option<String>,
-    keys: UiuaValue,
+    keys: Option<Box<UiuaValue>>,
 }
 
-#[derive(Serialize, Deserialize)]
 enum UiuaValue {
     Byte(UiuaArray<u8>),
     Num(UiuaArray<f64>),
     Char(UiuaArray<char>),
     Complex(UiuaArray<(f64, f64)>),
-    Box(UiuaArray<UiuaValue>),
+    Box(UiuaArray<Box<UiuaValue>>),
+}
+
+impl Serialize for UiuaValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut struct_ser = serializer.serialize_struct("UiuaArray", 4)?;
+        
+        match self {
+            UiuaValue::Byte(array) => {
+                struct_ser.serialize_field("data", &array.data)?;
+                struct_ser.serialize_field("shape", &array.shape)?;
+                struct_ser.serialize_field("label", &array.label)?;
+                struct_ser.serialize_field("keys", &array.keys)?;
+                struct_ser.serialize_field("boxed", &false)?;
+            },
+            UiuaValue::Num(array) => {
+                struct_ser.serialize_field("data", &array.data)?;
+                struct_ser.serialize_field("shape", &array.shape)?;
+                struct_ser.serialize_field("label", &array.label)?;
+                struct_ser.serialize_field("keys", &array.keys)?;
+                struct_ser.serialize_field("boxed", &false)?;
+            },
+            UiuaValue::Char(array) => {
+                struct_ser.serialize_field("data", &array.data.iter().collect::<String>())?;
+                struct_ser.serialize_field("shape", &array.shape)?;
+                struct_ser.serialize_field("label", &array.label)?;
+                struct_ser.serialize_field("keys", &array.keys)?;
+                struct_ser.serialize_field("boxed", &false)?;
+            },
+            UiuaValue::Complex(array) => {
+                struct_ser.serialize_field("data", &array.data)?;
+                struct_ser.serialize_field("shape", &array.shape)?;
+                struct_ser.serialize_field("label", &array.label)?;
+                struct_ser.serialize_field("keys", &array.keys)?;
+                struct_ser.serialize_field("boxed", &false)?;
+            },
+            UiuaValue::Box(array) => {
+                struct_ser.serialize_field("data", &array.data)?;
+                struct_ser.serialize_field("shape", &array.shape)?;
+                struct_ser.serialize_field("label", &array.label)?;
+                struct_ser.serialize_field("keys", &array.keys)?;
+                struct_ser.serialize_field("boxed", &true)?;
+            },
+        }
+
+        struct_ser.end()
+    }
+}
+
+impl From<Value> for UiuaValue {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Byte(array) => UiuaValue::Byte(UiuaArray {
+                data: array.elements().cloned().collect(),
+                shape: array.shape().to_vec(),
+                label: array.meta().label.as_ref().map(|s| s.to_string()),
+                keys: array.meta().map_keys.as_ref().map(|keys| Box::new(keys.normalized_keys().into())),
+            }),
+            Value::Num(array) => UiuaValue::Num(UiuaArray {
+                data: array.elements().cloned().collect(),
+                shape: array.shape().to_vec(),
+                label: array.meta().label.as_ref().map(|s| s.to_string()),
+                keys: array.meta().map_keys.as_ref().map(|keys| Box::new(keys.normalized_keys().into())),
+            }),
+            Value::Char(array) => UiuaValue::Char(UiuaArray {
+                data: array.elements().cloned().collect(),
+                shape: array.shape().to_vec(),
+                label: array.meta().label.as_ref().map(|s| s.to_string()),
+                keys: array.meta().map_keys.as_ref().map(|keys| Box::new(keys.normalized_keys().into())),
+            }),
+            Value::Complex(array) => UiuaValue::Complex(UiuaArray {
+                data: array.elements().map(|c| (c.re, c.im)).collect(),
+                shape: array.shape().to_vec(),
+                label: array.meta().label.as_ref().map(|s| s.to_string()),
+                keys: array.meta().map_keys.as_ref().map(|keys| Box::new(keys.normalized_keys().into())),
+            }),
+            Value::Box(array) => UiuaValue::Box(UiuaArray {
+                data: array.elements().map(|v| Box::new(UiuaValue::from(v.0.clone()))).collect(),
+                shape: array.shape().to_vec(),
+                label: array.meta().label.as_ref().map(|s| s.to_string()),
+                keys: array.meta().map_keys.as_ref().map(|keys| Box::new(keys.normalized_keys().into())),
+            }),
+        }
+    }
+    
 }
 
 #[wasm_bindgen]
@@ -197,8 +282,6 @@ pub fn test_run(code: String) -> Result<JsValue, JsError> {
         return Err(JsError::new("uh, something went wrong"));
     }
 
-    // let values = uiua.stack().iter().map(|value| value_to_js_value(value));
-    // Ok(JsValue::from(values.collect::<js_sys::Array>()))
-
-    Ok(serde_wasm_bindgen::to_value(&uiua.stack())?)
+    let values = uiua.stack().iter().map(|value| UiuaValue::from(value.clone())).collect::<Vec<UiuaValue>>();
+    Ok(serde_wasm_bindgen::to_value(&values)?)
 }

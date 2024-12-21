@@ -22,8 +22,8 @@ import { format, test, getShape } from "./lib/main";
 // console.log(getShape([[1, 2], [3, 4]]))
 // console.log(getShape([[[1], [2], [6]], [[3], [4], [5]]]))
 // console.log(getShape(["", ""]))
-console.log(getShape([[{value: [1, 2, 3]}, {value: "123"}], [{value: [1, 2, 3]}, {value: "123"}]]))
+// console.log(getShape([[{value: [1, 2, 3]}, {value: "123"}], [{value: [1, 2, 3]}, {value: "123"}]]))
 
 // console.log(flattenArray([[[1], [2], [3]], [[4], [5], [6]]]))
 
-console.log(test(`$asd map {"hello world" "test" "foo"} {"universe" "pog" "bar"}`));
+console.log(test(`$asd map {"1 hello world" "2 test" "3 foo"} {"1 universe" "2 pog" "3 bar"}`));

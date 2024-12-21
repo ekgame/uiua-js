@@ -7,6 +7,10 @@
     "lib": "lib",
     "dist": "dist"
   },
+  "scripts": {
+    "build": "wasm-pack build --target web crate/",
+    "dev": "vite"
+  },
   "author": "ekgame",
   "license": "MIT",
   "devDependencies": {

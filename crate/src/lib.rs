@@ -1,6 +1,7 @@
+use js_sys::Function;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use uiua::format::{format_str, FormatConfig, FormatOutput};
-use uiua::{CodeSpan, InputSrc, Inputs, Loc, Uiua, Value};
+use uiua::{CodeSpan, Compiler, Loc, Uiua, Value};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "wee_alloc")]
@@ -295,11 +296,102 @@ impl From<Value> for UiuaValue {
     }
 }
 
+#[wasm_bindgen]
+pub struct JsRuntime {
+    bindings: Vec<JsBinding>,
+}
 
 #[wasm_bindgen]
-pub fn test_run(code: String) -> Result<JsValue, JsValue> {
+impl JsRuntime {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        JsRuntime {
+            bindings: Vec::new(),
+        }
+    }
+
+    pub fn add_binding(&mut self, binding: JsBinding) {
+        self.bindings.push(binding);
+    }
+}
+
+#[wasm_bindgen]
+pub struct JsBinding {
+    name: String,
+    signature: (usize, usize),
+    callback: JsFunctionWrapper,
+}
+
+#[wasm_bindgen]
+impl JsBinding {
+    #[wasm_bindgen(constructor)]
+    pub fn new(name: String, inouts: usize, outputs: usize, callback: Function) -> JsBinding {
+        JsBinding {
+            name,
+            signature: (inouts, outputs),
+            callback: JsFunctionWrapper(callback),
+        }
+    }
+}
+
+#[wasm_bindgen]
+struct JsFunctionWrapper(Function);
+unsafe impl Send for JsFunctionWrapper {}
+unsafe impl Sync for JsFunctionWrapper {}
+
+#[wasm_bindgen]
+pub struct MyStruct {
+    value: i32,
+}
+
+#[wasm_bindgen]
+impl MyStruct {
+    // Constructor
+    #[wasm_bindgen(constructor)]
+    pub fn new(value: i32) -> MyStruct {
+        MyStruct { value }
+    }
+
+    // Getter
+    pub fn get_value(&self) -> i32 {
+        self.value
+    }
+
+    // Setter
+    pub fn set_value(&mut self, value: i32) {
+        self.value = value;
+    }
+
+    // Another method
+    pub fn increment(&mut self) {
+        self.value += 1;
+    }
+}
+
+#[wasm_bindgen]
+pub fn run(code: String, runtime: JsRuntime) -> Result<JsValue, JsValue> {
+    let mut comp = Compiler::new();
+    runtime.bindings.into_iter().for_each(|binding| {
+        let callback = binding.callback;
+        let _ = comp.create_bind_function(&binding.name, binding.signature, move |_| {
+            let my_struct = MyStruct::new(42);
+            callback
+                .0
+                .call1(&JsValue::undefined(), &JsValue::from(my_struct))
+                .unwrap();
+            Ok(())
+        });
+    });
+
+    let result = comp.load_str(code.as_str());
+
+    if let Err(err) = result {
+        return Err(JsError::from(err).into());
+    }
+
+    let asm = comp.finish();
     let mut uiua = Uiua::with_safe_sys();
-    let result = uiua.compile_run(|comp| comp.print_diagnostics(true).load_str(&*code));
+    let result = uiua.run_asm(asm);
 
     if let Err(err) = result {
         return Err(JsError::from(err).into());

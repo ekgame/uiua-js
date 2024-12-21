@@ -1,90 +1,21 @@
 import init, {
   format_internal,
   FormatConfigStruct,
-  test_run,
+  JsBinding,
+  JsRuntime,
+  run,
 } from "../crate/pkg/uiua_js";
 
 // @ts-ignore
 await init();
 
-interface FormatConfig {
-  trailingNewLine: boolean;
-  commentSpaceAfterHash: boolean;
-  multilineIndent: number;
-  alignComments: boolean;
-  indentItemImports: boolean;
-}
-
-interface DocumentLocation {
-  line: number;
-  column: number;
-}
-
-interface DocumentSpan {
-  from: DocumentLocation;
-  to: DocumentLocation;
-}
-
-interface GlyphMapping {
-  spanFrom: DocumentSpan;
-  spanTo: DocumentSpan;
-}
-
-interface FormatOutput {
-  output: string;
-  mappings: GlyphMapping[];
-}
-
-export function format(
-  code: string,
-  config?: Partial<FormatConfig>,
-): FormatOutput {
-  let configStruct = new FormatConfigStruct();
-
-  config = config || {};
-  if (config.trailingNewLine !== undefined) {
-    configStruct = configStruct.with_trailing_newline(
-      config.trailingNewLine,
-    );
-  }
-
-  if (config.commentSpaceAfterHash !== undefined) {
-    configStruct = configStruct.with_comment_space_after_hash(
-      config.commentSpaceAfterHash,
-    );
-  }
-
-  if (config.multilineIndent !== undefined) {
-    configStruct = configStruct.with_multiline_indent(
-      config.multilineIndent,
-    );
-  }
-
-  if (config.alignComments !== undefined) {
-    configStruct = configStruct.with_align_comments(config.alignComments);
-  }
-
-  if (config.indentItemImports !== undefined) {
-    configStruct = configStruct.with_indent_item_imports(
-      config.indentItemImports,
-    );
-  }
-
-  const results = format_internal(code, configStruct);
-
-  return {
-    output: results.output as string,
-    mappings: results.glyph_map as GlyphMapping[],
-  };
-}
-
-interface UiuaArray<T> extends Array<T | UiuaArray<T>> {}
+interface UiuaArray<T> extends Array<T | UiuaArray<T>> { }
 
 interface UiuaValueBase {
   type: 'number' | 'char' | 'box' | 'complex'
   shape: number[]
-  label: string|null
-  keys: UiuaValue|null
+  label: string | null
+  keys: UiuaValue | null
 }
 
 interface UiuaValueNumber extends UiuaValueBase {
@@ -213,6 +144,26 @@ function formatResult(result: any): UiuaValue {
   };
 }
 
-export function test(code: string) {
-    return test_run(code).map(formatResult);
+export interface UiuaRuntime {
+  bindings: UiuaJavaScriptBinding[],
+}
+
+export interface UiuaJavaScriptBinding {
+  name: string,
+  signature: [inputs: number, outputs: number],
+  callback: (uiua: Uiua) => void,
+}
+
+interface Uiua {
+
+}
+
+export function test(code: string, runtime: UiuaRuntime): UiuaValue[] {
+  const internalRuntime = new JsRuntime();
+  runtime.bindings.forEach(({name, signature, callback}) => {
+    const binding = new JsBinding(name, signature[0], signature[1], callback);
+    internalRuntime.add_binding(binding);
+  });
+
+  return run(code, internalRuntime).map(formatResult);
 }

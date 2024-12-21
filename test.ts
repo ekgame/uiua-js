@@ -1,4 +1,4 @@
-import { format, test, getShape } from "./lib/main";
+import { test } from "./lib/main";
 
 // const code = 'resh3_4rang12';
 // const formatted = format(code, {
@@ -30,9 +30,19 @@ import { format, test, getShape } from "./lib/main";
 // console.log(test(`range10`));
 // console.log(test(`↯2_2≡(ℂ°⊟)↯∞_2⇡10`));
 // console.log(JSON.stringify(test(`↯2_3_4 ⇡100`)[0].data));
-console.log(test(`
-    map {} {}
-    insert∩□ "hello" "world"
-    insert∩□ "range" ⇡10
-    insert∩□ "reshape" ↯1_2_3_4⇡10
-`));
+// console.log(test(`
+//     map {} {}
+//     insert∩□ "hello" "world"
+//     insert∩□ "range" ⇡10
+//     insert∩□ "reshape" ↯1_2_3_4⇡10
+// `));
+
+console.log(test(`MyFunc`, {
+    bindings: [{
+        name: "MyFunc",
+        signature: [0, 0],
+        callback: (uiua) => {
+            alert("Hello World!");
+        }
+    }]
+}));

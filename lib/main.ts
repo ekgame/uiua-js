@@ -11,6 +11,6 @@ export { UiuaValue } from "./value";
 // @ts-ignore
 await init();
 
-export function test(code: string, runtime: UiuaRuntime): UiuaValue[] {
+export function runString(code: string, runtime: UiuaRuntime): UiuaValue[] {
   return run(code, runtime.internal).map(UiuaValue.fromModel);
 }

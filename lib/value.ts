@@ -122,14 +122,14 @@ export class UiuaValue {
         let data: any[] = model.data;
 
         if (model.type === "box") {
-            data = data.map(this.fromModel);
+            data = data.map(UiuaValue.fromModel);
         }
 
         return new UiuaValue(
             reshapeArray(data, model.shape, model.type),
             model.shape,
             model.label || null,
-            model.keys ? this.fromModel(model.keys) : null,
+            model.keys ? UiuaValue.fromModel(model.keys) : null,
             model.type,
         );
     }

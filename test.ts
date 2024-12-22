@@ -1,48 +1,19 @@
-import { test, UiuaRuntime, UiuaValue } from "./lib/main";
-
-// const code = 'resh3_4rang12';
-// const formatted = format(code, {
-//     trailingNewLine: true,
-//     commentSpaceAfterHash: true,
-//     multilineIndent: 2,
-//     alignComments: true,
-//     indentItemImports: true
-// });
-
-// console.log(test(`9 + 3 5`));
-// console.log(test(`range10`));
-// console.log(test(`{"123" "asdqwe" [1_2 3_4]}`));
-// console.log(test(`↯ 2_inf range10`));
-// console.log(test(`↯ 2_2 {"123" "asdqwe" [1_2 3_4]}`));
-// console.log(test(`div 2 ↯ 2_inf range10`));
-// console.log(test(`$test + @a range10`));
-
-// console.log(getShape(1))
-// console.log(getShape([1, 2]))
-// console.log(getShape([[1, 2], [3, 4]]))
-// console.log(getShape([[[1], [2], [6]], [[3], [4], [5]]]))
-// console.log(getShape(["", ""]))
-// console.log(getShape([[{value: [1, 2, 3]}, {value: "123"}], [{value: [1, 2, 3]}, {value: "123"}]]))
-
-// console.log(flattenArray([[[1], [2], [3]], [[4], [5], [6]]]))
-
-// console.log(test(`$asd map {"1 hello world" "2 test" "3 foo"} {"1 universe" "2 pog" "3 bar"}`));
-// console.log(test(`range10`));
-// console.log(test(`↯2_2≡(ℂ°⊟)↯∞_2⇡10`));
-// console.log(JSON.stringify(test(`↯2_3_4 ⇡100`)[0].data));
-// console.log(test(`
-//     map {} {}
-//     insert∩□ "hello" "world"
-//     insert∩□ "range" ⇡10
-//     insert∩□ "reshape" ↯1_2_3_4⇡10
-// `));
+import { runString, UiuaRuntime, UiuaValue } from "./lib/main";
 
 const runtime = new UiuaRuntime();
-runtime.addBinding("MyAdd", 2, 1, (uiua) => {
+
+runtime.addBinding("MyAddWithMessage", 2, 1, (uiua) => {
     const val1 = uiua.pop().asNumber();
     const val2 = uiua.pop().asNumber();
+    console.log('Hello from JS!');
     const result = UiuaValue.fromNumber(val1 + val2);
     uiua.push(result);
 });
 
-console.log(test(`MyAdd 1 2`, runtime).map((value) => value.asNumber()));
+let result = runString(`
+    map {} {}
+    insert∩□ "foo" "bar"
+    insert∩□ "baz" ⇡ 10
+    insert∩□ "third" ↯ 1_2_3 ⇡ 10    
+`, runtime);
+console.log('Result from Uiua: ', result);

@@ -382,7 +382,7 @@ impl From<Value> for UiuaValue {
                     .meta()
                     .map_keys
                     .as_ref()
-                    .map(|keys| Box::new(keys.normalized_keys().into())),
+                    .map(|keys| Box::new(keys.clone().normalized().into())),
             }),
             Value::Num(array) => UiuaValue::Num(UiuaArray {
                 data: array.elements().cloned().collect(),
@@ -392,7 +392,7 @@ impl From<Value> for UiuaValue {
                     .meta()
                     .map_keys
                     .as_ref()
-                    .map(|keys| Box::new(keys.normalized_keys().into())),
+                    .map(|keys| Box::new(keys.clone().normalized().into())),
             }),
             Value::Char(array) => UiuaValue::Char(UiuaArray {
                 data: array.elements().cloned().collect(),
@@ -402,7 +402,7 @@ impl From<Value> for UiuaValue {
                     .meta()
                     .map_keys
                     .as_ref()
-                    .map(|keys| Box::new(keys.normalized_keys().into())),
+                    .map(|keys| Box::new(keys.clone().normalized().into())),
             }),
             Value::Complex(array) => UiuaValue::Complex(UiuaArray {
                 data: array.elements().map(|c| (c.re, c.im)).collect(),
@@ -412,7 +412,7 @@ impl From<Value> for UiuaValue {
                     .meta()
                     .map_keys
                     .as_ref()
-                    .map(|keys| Box::new(keys.normalized_keys().into())),
+                    .map(|keys| Box::new(keys.clone().normalized().into())),
             }),
             Value::Box(array) => UiuaValue::Box(UiuaArray {
                 data: array
@@ -425,7 +425,7 @@ impl From<Value> for UiuaValue {
                     .meta()
                     .map_keys
                     .as_ref()
-                    .map(|keys| Box::new(keys.normalized_keys().into())),
+                    .map(|keys| Box::new(keys.clone().normalized().into())),
             }),
         }
     }

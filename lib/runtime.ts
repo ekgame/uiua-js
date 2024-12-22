@@ -1,4 +1,5 @@
 import {
+    CompilerRef,
     UiuaRef,
     UiuaRuntimeInternal,
 } from "../crate/pkg/uiua_js";
@@ -32,5 +33,9 @@ export class UiuaRuntime {
         this.internal.addBinding(name, inputs, outputs, (ref: UiuaRef) => {
             callback(new Uiua(ref));
         });
+    }
+
+    setCompiler(compiler: CompilerRef) {
+        this.internal.setCompiler(compiler);
     }
 }

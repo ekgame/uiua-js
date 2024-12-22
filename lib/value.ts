@@ -29,7 +29,7 @@ interface UiuaValueBox extends UiuaValueBase {
     data: UiuaArray<UiuaValueModel>
 }
 
-type UiuaValueModel = UiuaValueNumber | UiuaValueChar | UiuaValueComplex | UiuaValueBox
+export type UiuaValueModel = UiuaValueNumber | UiuaValueChar | UiuaValueComplex | UiuaValueBox
 
 export class UiuaValue {
     private constructor(

@@ -3,7 +3,7 @@ use serde::de::Deserializer;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use serde::Deserialize;
 use uiua::format::{format_str, FormatConfig, FormatOutput};
-use uiua::{Assembly, Boxed, CodeSpan, Compiler, Loc, Uiua, Value};
+use uiua::{Boxed, CodeSpan, Compiler, Loc, Uiua, Value};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "wee_alloc")]
@@ -434,7 +434,7 @@ impl From<Value> for UiuaValue {
 #[wasm_bindgen]
 pub struct UiuaRuntimeInternal {
     bindings: Vec<JsBinding>,
-    assembly: Option<Assembly>,
+    compiler: Option<CompilerRef>,
 }
 
 #[wasm_bindgen]
@@ -443,7 +443,7 @@ impl UiuaRuntimeInternal {
     pub fn new() -> Self {
         UiuaRuntimeInternal {
             bindings: Vec::new(),
-            assembly: None,
+            compiler: None,
         }
     }
 
@@ -451,6 +451,11 @@ impl UiuaRuntimeInternal {
     pub fn add_binding(&mut self, name: String, inputs: usize, outputs: usize, callback: Function) {
         let binding = JsBinding::new(name, inputs, outputs, callback);
         self.bindings.push(binding);
+    }
+
+    #[wasm_bindgen(js_name = setCompiler)]
+    pub fn set_compiler(&mut self, compiler: &CompilerRef) {
+        self.compiler = Some(compiler.clone());
     }
 }
 
@@ -513,6 +518,13 @@ impl UiuaRef {
 #[wasm_bindgen]
 pub struct UiuaExecutionResultInternal {
     stack: Vec<Value>,
+    compiler: Compiler,
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct CompilerRef {
+    compiler: Compiler,
 }
 
 #[wasm_bindgen]
@@ -527,6 +539,13 @@ impl UiuaExecutionResultInternal {
 
         serde_wasm_bindgen::to_value(&values).unwrap()
     }
+
+    #[wasm_bindgen(getter)]
+    pub fn compiler(&self) -> CompilerRef {
+        CompilerRef {
+            compiler: self.compiler.clone(),
+        }
+    }
 }
 
 #[wasm_bindgen(js_name = runCode)]
@@ -535,26 +554,34 @@ pub fn run_code(
     initial_values: Vec<JsValue>,
     runtime: UiuaRuntimeInternal,
 ) -> Result<UiuaExecutionResultInternal, JsValue> {
-    let mut comp: Compiler = Compiler::new();
-    runtime.bindings.into_iter().for_each(|binding| {
-        let callback = binding.callback;
-        let _ = comp.create_bind_function(&binding.name, binding.signature, move |uiua| {
-            let wrapped = UiuaRef::new(uiua);
-            callback
-                .call1(&JsValue::undefined(), &JsValue::from(wrapped))
-                .unwrap();
-            Ok(())
-        });
-    });
+    let mut uiua = Uiua::with_safe_sys();
+    let mut compiler: Compiler = match runtime.compiler.as_ref() {
+        Some(compiler) => compiler.compiler.clone(),
+        None => {
+            let mut compiler = Compiler::new();
+            runtime.bindings.into_iter().for_each(|binding| {
+                let callback = binding.callback;
+                let _ = compiler.create_bind_function(&binding.name, binding.signature, move |uiua| {
+                    let wrapped = UiuaRef::new(uiua);
+                    callback
+                        .call1(&JsValue::undefined(), &JsValue::from(wrapped))
+                        .unwrap();
+                    Ok(())
+                });
+            });
+            compiler
+        },
+    };
 
-    let result = comp.load_str(code.as_str());
+    // This line makes sure that if the compiler was used before, it won't rerun the previous code
+    compiler.assembly_mut().root.clear();
+
+    // Load the code into the compiler
+    let result = compiler.load_str(code.as_str());
 
     if let Err(err) = result {
         return Err(JsError::from(err).into());
     }
-
-    let asm = comp.finish();
-    let mut uiua = Uiua::with_safe_sys();
 
     initial_values.into_iter().for_each(|value| {
         let value: UiuaValue = serde_wasm_bindgen::from_value(value).unwrap();
@@ -562,7 +589,7 @@ pub fn run_code(
         uiua.push(value);
     });
 
-    let result = uiua.run_asm(asm);
+    let result = uiua.run_compiler(&mut compiler);
 
     if let Err(err) = result {
         return Err(JsError::from(err).into());
@@ -570,6 +597,7 @@ pub fn run_code(
 
     let result = UiuaExecutionResultInternal {
         stack: uiua.stack().to_vec(),
+        compiler,
     };
 
     Ok(result)

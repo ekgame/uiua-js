@@ -1,9 +1,10 @@
 import init, {
+  CompilerRef,
   runCode,
 } from "../crate/pkg/uiua_js";
 
 import { UiuaRuntime } from "./runtime";
-import { UiuaValue } from "./value";
+import { UiuaValue, UiuaValueModel } from "./value";
 
 export { UiuaRuntime } from "./runtime";
 export { UiuaValue } from "./value";
@@ -13,9 +14,14 @@ await init();
 
 interface UiuaExecutionResult {
   stack: UiuaValue[];
+  compiler: CompilerRef;
 }
 
-export function runString(code: string, initialValues: UiuaValue[], runtime: UiuaRuntime): UiuaExecutionResult {
+export function runString(
+  code: string,
+  initialValues: UiuaValue[],
+  runtime: UiuaRuntime
+): UiuaExecutionResult {
   const result = runCode(
     code,
     initialValues.map(value => value.toModel()),
@@ -23,6 +29,7 @@ export function runString(code: string, initialValues: UiuaValue[], runtime: Uiu
   );
   
   return {
-    stack: result.stack.map(value => UiuaValue.fromModel(value)),
+    stack: result.stack.map((value: UiuaValueModel) => UiuaValue.fromModel(value)),
+    compiler: result.compiler,
   }
 }

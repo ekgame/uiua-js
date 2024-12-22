@@ -459,10 +459,10 @@ pub struct JsBinding {
 }
 
 impl JsBinding {
-    pub fn new(name: String, inouts: usize, outputs: usize, callback: Function) -> JsBinding {
+    pub fn new(name: String, inputs: usize, outputs: usize, callback: Function) -> JsBinding {
         JsBinding {
             name,
-            signature: (inouts, outputs),
+            signature: (inputs, outputs),
             callback: JsFunctionWrapper(callback),
         }
     }
@@ -508,8 +508,8 @@ impl UiuaRef {
     }
 }
 
-#[wasm_bindgen]
-pub fn run(code: String, runtime: UiuaRuntimeInternal) -> Result<JsValue, JsValue> {
+#[wasm_bindgen(js_name = runCode)]
+pub fn run_code(code: String, initial_values: Vec<JsValue>, runtime: UiuaRuntimeInternal) -> Result<JsValue, JsValue> {
     let mut comp = Compiler::new();
     runtime.bindings.into_iter().for_each(|binding| {
         let callback = binding.callback;
@@ -530,6 +530,13 @@ pub fn run(code: String, runtime: UiuaRuntimeInternal) -> Result<JsValue, JsValu
 
     let asm = comp.finish();
     let mut uiua = Uiua::with_safe_sys();
+
+    initial_values.into_iter().for_each(|value| {
+        let value: UiuaValue = serde_wasm_bindgen::from_value(value).unwrap();
+        let value: Value = value.into();
+        uiua.push(value);
+    });
+
     let result = uiua.run_asm(asm);
 
     if let Err(err) = result {

@@ -10,10 +10,9 @@ runtime.addBinding("MyAddWithMessage", 2, 1, (uiua) => {
     uiua.push(result);
 });
 
-let result = runString(`
-    map {} {}
-    insert∩□ "foo" "bar"
-    insert∩□ "baz" ⇡ 10
-    insert∩□ "third" ↯ 1_2_3 ⇡ 10    
-`, runtime);
+let result = runString(`-`, [
+    UiuaValue.fromNumber(5),
+    UiuaValue.fromNumber(3),
+], runtime);
+
 console.log('Result from Uiua: ', result);

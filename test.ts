@@ -1,4 +1,4 @@
-import { test } from "./lib/main";
+import { test, UiuaRuntime, UiuaValue } from "./lib/main";
 
 // const code = 'resh3_4rang12';
 // const formatted = format(code, {
@@ -37,12 +37,12 @@ import { test } from "./lib/main";
 //     insert∩□ "reshape" ↯1_2_3_4⇡10
 // `));
 
-console.log(test(`MyFunc`, {
-    bindings: [{
-        name: "MyFunc",
-        signature: [0, 0],
-        callback: (uiua) => {
-            alert("Hello World!");
-        }
-    }]
-}));
+const runtime = new UiuaRuntime();
+runtime.addBinding("MyAdd", 2, 1, (uiua) => {
+    const val1 = uiua.pop().asNumber();
+    const val2 = uiua.pop().asNumber();
+    const result = UiuaValue.fromNumber(val1 + val2);
+    uiua.push(result);
+});
+
+console.log(test(`MyAdd 1 2`, runtime).map((value) => value.asNumber()));

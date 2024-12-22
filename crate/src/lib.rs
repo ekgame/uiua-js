@@ -1,7 +1,9 @@
 use js_sys::Function;
+use serde::de::Deserializer;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde::Deserialize;
 use uiua::format::{format_str, FormatConfig, FormatOutput};
-use uiua::{CodeSpan, Compiler, Loc, Uiua, Value};
+use uiua::{Boxed, CodeSpan, Compiler, Loc, Uiua, Value};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "wee_alloc")]
@@ -172,6 +174,7 @@ pub fn format_internal(code: String, config: FormatConfigStruct) -> Result<JsVal
     Ok(serde_wasm_bindgen::to_value(&output)?)
 }
 
+#[derive(Clone)]
 struct UiuaArray<T> {
     data: Vec<T>,
     shape: Vec<usize>,
@@ -179,12 +182,50 @@ struct UiuaArray<T> {
     keys: Option<Box<UiuaValue>>,
 }
 
+#[derive(Clone)]
 enum UiuaValue {
     Byte(UiuaArray<u8>),
     Num(UiuaArray<f64>),
     Char(UiuaArray<char>),
     Complex(UiuaArray<(f64, f64)>),
     Box(UiuaArray<Box<UiuaValue>>),
+}
+
+impl Into<Value> for UiuaValue {
+    fn into(self) -> Value {
+        match self {
+            UiuaValue::Byte(array) => Value::Byte(uiua::Array::new(
+                array.shape.into_iter().collect::<uiua::Shape>(),
+                array.data.as_slice(),
+            )),
+            UiuaValue::Num(array) => Value::Num(uiua::Array::new(
+                array.shape.into_iter().collect::<uiua::Shape>(),
+                array.data.as_slice(),
+            )),
+            UiuaValue::Char(array) => Value::Char(uiua::Array::new(
+                array.shape.into_iter().collect::<uiua::Shape>(),
+                array.data.as_slice(),
+            )),
+            UiuaValue::Complex(array) => Value::Complex(uiua::Array::new(
+                array.shape.into_iter().collect::<uiua::Shape>(),
+                array
+                    .data
+                    .iter()
+                    .map(|(re, im)| uiua::Complex { re: *re, im: *im })
+                    .collect::<Vec<uiua::Complex>>()
+                    .as_slice(),
+            )),
+            UiuaValue::Box(array) => Value::Box(uiua::Array::new(
+                array.shape.into_iter().collect::<uiua::Shape>(),
+                array
+                    .data
+                    .iter()
+                    .map(|v| Boxed((**v).clone().into()))
+                    .collect::<Vec<Boxed>>()
+                    .as_slice(),
+            )),
+        }
+    }
 }
 
 impl Serialize for UiuaValue {
@@ -233,6 +274,100 @@ impl Serialize for UiuaValue {
         }
 
         struct_ser.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for UiuaValue {
+    fn deserialize<D>(deserializer: D) -> Result<UiuaValue, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct UiuaArrayStruct {
+            data: Vec<serde_json::Value>,
+            shape: Vec<usize>,
+            label: Option<String>,
+            keys: Option<Box<UiuaValue>>,
+            #[serde(rename = "type")]
+            type_: String,
+        }
+
+        let array: UiuaArrayStruct = Deserialize::deserialize(deserializer)?;
+
+        match array.type_.as_str() {
+            "number" => {
+                let data = array
+                    .data
+                    .iter()
+                    .map(|v| {
+                        v.as_f64()
+                            .ok_or(serde::de::Error::custom("Expected number"))
+                    })
+                    .collect::<Result<Vec<f64>, _>>()?;
+                Ok(UiuaValue::Num(UiuaArray {
+                    data,
+                    shape: array.shape,
+                    label: array.label,
+                    keys: array.keys,
+                }))
+            }
+            "char" => {
+                let data = array
+                    .data
+                    .iter()
+                    .map(|v| {
+                        v.as_str()
+                            .and_then(|s| s.chars().next())
+                            .ok_or(serde::de::Error::custom("Expected char"))
+                    })
+                    .collect::<Result<Vec<char>, _>>()?;
+                Ok(UiuaValue::Char(UiuaArray {
+                    data,
+                    shape: array.shape,
+                    label: array.label,
+                    keys: array.keys,
+                }))
+            }
+            "complex" => {
+                let data = array
+                    .data
+                    .iter()
+                    .map(|v| {
+                        let re = v[0]
+                            .as_f64()
+                            .ok_or(serde::de::Error::custom("Expected number"))?;
+                        let im = v[1]
+                            .as_f64()
+                            .ok_or(serde::de::Error::custom("Expected number"))?;
+                        Ok((re, im))
+                    })
+                    .collect::<Result<Vec<(f64, f64)>, _>>()?;
+                Ok(UiuaValue::Complex(UiuaArray {
+                    data,
+                    shape: array.shape,
+                    label: array.label,
+                    keys: array.keys,
+                }))
+            }
+            "box" => {
+                let data = array
+                    .data
+                    .iter()
+                    .map(|v| {
+                        let value: UiuaValue =
+                            serde_json::from_value(v.clone()).map_err(serde::de::Error::custom)?;
+                        Ok(Box::new(value))
+                    })
+                    .collect::<Result<Vec<Box<UiuaValue>>, _>>()?;
+                Ok(UiuaValue::Box(UiuaArray {
+                    data,
+                    shape: array.shape,
+                    label: array.label,
+                    keys: array.keys,
+                }))
+            }
+            _ => Err(serde::de::Error::custom("Invalid type")),
+        }
     }
 }
 
@@ -297,34 +432,33 @@ impl From<Value> for UiuaValue {
 }
 
 #[wasm_bindgen]
-pub struct JsRuntime {
+pub struct UiuaRuntimeInternal {
     bindings: Vec<JsBinding>,
 }
 
 #[wasm_bindgen]
-impl JsRuntime {
+impl UiuaRuntimeInternal {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        JsRuntime {
+        UiuaRuntimeInternal {
             bindings: Vec::new(),
         }
     }
 
-    pub fn add_binding(&mut self, binding: JsBinding) {
+    #[wasm_bindgen(js_name = addBinding)]
+    pub fn add_binding(&mut self, name: String, inputs: usize, outputs: usize, callback: Function) {
+        let binding = JsBinding::new(name, inputs, outputs, callback);
         self.bindings.push(binding);
     }
 }
 
-#[wasm_bindgen]
 pub struct JsBinding {
     name: String,
     signature: (usize, usize),
     callback: JsFunctionWrapper,
 }
 
-#[wasm_bindgen]
 impl JsBinding {
-    #[wasm_bindgen(constructor)]
     pub fn new(name: String, inouts: usize, outputs: usize, callback: Function) -> JsBinding {
         JsBinding {
             name,
@@ -339,45 +473,50 @@ struct JsFunctionWrapper(Function);
 unsafe impl Send for JsFunctionWrapper {}
 unsafe impl Sync for JsFunctionWrapper {}
 
-#[wasm_bindgen]
-pub struct MyStruct {
-    value: i32,
-}
-
-#[wasm_bindgen]
-impl MyStruct {
-    // Constructor
-    #[wasm_bindgen(constructor)]
-    pub fn new(value: i32) -> MyStruct {
-        MyStruct { value }
-    }
-
-    // Getter
-    pub fn get_value(&self) -> i32 {
-        self.value
-    }
-
-    // Setter
-    pub fn set_value(&mut self, value: i32) {
-        self.value = value;
-    }
-
-    // Another method
-    pub fn increment(&mut self) {
-        self.value += 1;
+impl JsFunctionWrapper {
+    fn call1(&self, this: &JsValue, arg: &JsValue) -> Result<JsValue, JsValue> {
+        self.0.call1(this, arg)
     }
 }
 
 #[wasm_bindgen]
-pub fn run(code: String, runtime: JsRuntime) -> Result<JsValue, JsValue> {
+pub struct UiuaRef {
+    uiua: *mut Uiua,
+}
+
+#[wasm_bindgen]
+impl UiuaRef {
+    fn new(uiua: &mut Uiua) -> UiuaRef {
+        UiuaRef { uiua }
+    }
+
+    pub fn pop(&mut self) -> Result<JsValue, JsError> {
+        let uiua = unsafe { &mut *self.uiua };
+        let result = uiua.pop(()).map(|value| UiuaValue::from(value));
+        match result {
+            Ok(value) => Ok(serde_wasm_bindgen::to_value(&value)?),
+            Err(err) => Err(JsError::from(err).into()),
+        }
+    }
+
+    pub fn push(&mut self, value: JsValue) -> Result<(), JsError> {
+        let uiua = unsafe { &mut *self.uiua };
+        let value: UiuaValue = serde_wasm_bindgen::from_value(value)?;
+        let value: Value = value.into();
+        uiua.push(value);
+        Ok(())
+    }
+}
+
+#[wasm_bindgen]
+pub fn run(code: String, runtime: UiuaRuntimeInternal) -> Result<JsValue, JsValue> {
     let mut comp = Compiler::new();
     runtime.bindings.into_iter().for_each(|binding| {
         let callback = binding.callback;
-        let _ = comp.create_bind_function(&binding.name, binding.signature, move |_| {
-            let my_struct = MyStruct::new(42);
+        let _ = comp.create_bind_function(&binding.name, binding.signature, move |uiua| {
+            let wrapped = UiuaRef::new(uiua);
             callback
-                .0
-                .call1(&JsValue::undefined(), &JsValue::from(my_struct))
+                .call1(&JsValue::undefined(), &JsValue::from(wrapped))
                 .unwrap();
             Ok(())
         });

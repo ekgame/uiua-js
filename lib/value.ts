@@ -38,9 +38,7 @@ export class UiuaValue {
         private _label: string | null,
         private _keys: UiuaValue | null,
         private _type: UiuaType,
-    ) {
-        console.trace(_data, _shape, _label, _keys, _type);
-    }
+    ) {}
 
     get data() {
         return this._data;

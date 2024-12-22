@@ -3,7 +3,7 @@ use serde::de::Deserializer;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use serde::Deserialize;
 use uiua::format::{format_str, FormatConfig, FormatOutput};
-use uiua::{Boxed, CodeSpan, Compiler, Loc, Uiua, Value};
+use uiua::{Assembly, Boxed, CodeSpan, Compiler, Loc, Uiua, Value};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "wee_alloc")]
@@ -434,6 +434,7 @@ impl From<Value> for UiuaValue {
 #[wasm_bindgen]
 pub struct UiuaRuntimeInternal {
     bindings: Vec<JsBinding>,
+    assembly: Option<Assembly>,
 }
 
 #[wasm_bindgen]
@@ -442,6 +443,7 @@ impl UiuaRuntimeInternal {
     pub fn new() -> Self {
         UiuaRuntimeInternal {
             bindings: Vec::new(),
+            assembly: None,
         }
     }
 
@@ -508,9 +510,32 @@ impl UiuaRef {
     }
 }
 
+#[wasm_bindgen]
+pub struct UiuaExecutionResultInternal {
+    stack: Vec<Value>,
+}
+
+#[wasm_bindgen]
+impl UiuaExecutionResultInternal {
+    #[wasm_bindgen(getter)]
+    pub fn stack(&self) -> JsValue {
+        let values = self
+            .stack
+            .iter()
+            .map(|value| UiuaValue::from(value.clone()))
+            .collect::<Vec<UiuaValue>>();
+
+        serde_wasm_bindgen::to_value(&values).unwrap()
+    }
+}
+
 #[wasm_bindgen(js_name = runCode)]
-pub fn run_code(code: String, initial_values: Vec<JsValue>, runtime: UiuaRuntimeInternal) -> Result<JsValue, JsValue> {
-    let mut comp = Compiler::new();
+pub fn run_code(
+    code: String,
+    initial_values: Vec<JsValue>,
+    runtime: UiuaRuntimeInternal,
+) -> Result<UiuaExecutionResultInternal, JsValue> {
+    let mut comp: Compiler = Compiler::new();
     runtime.bindings.into_iter().for_each(|binding| {
         let callback = binding.callback;
         let _ = comp.create_bind_function(&binding.name, binding.signature, move |uiua| {
@@ -543,11 +568,9 @@ pub fn run_code(code: String, initial_values: Vec<JsValue>, runtime: UiuaRuntime
         return Err(JsError::from(err).into());
     }
 
-    let values = uiua
-        .stack()
-        .iter()
-        .map(|value| UiuaValue::from(value.clone()))
-        .collect::<Vec<UiuaValue>>();
+    let result = UiuaExecutionResultInternal {
+        stack: uiua.stack().to_vec(),
+    };
 
-    Ok(serde_wasm_bindgen::to_value(&values)?)
+    Ok(result)
 }

@@ -11,10 +11,18 @@ export { UiuaValue } from "./value";
 // @ts-ignore
 await init();
 
-export function runString(code: string, initialValues: UiuaValue[], runtime: UiuaRuntime): UiuaValue[] {
-  return runCode(
+interface UiuaExecutionResult {
+  stack: UiuaValue[];
+}
+
+export function runString(code: string, initialValues: UiuaValue[], runtime: UiuaRuntime): UiuaExecutionResult {
+  const result = runCode(
     code,
     initialValues.map(value => value.toModel()),
     runtime.internal
-  ).map(UiuaValue.fromModel);
+  );
+  
+  return {
+    stack: result.stack.map(value => UiuaValue.fromModel(value)),
+  }
 }

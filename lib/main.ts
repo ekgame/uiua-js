@@ -12,15 +12,25 @@ export { UiuaValue } from "./value";
 // @ts-ignore
 await init();
 
+/**
+ * The result after Uiua code is executed.
+ */
 interface UiuaExecutionResult {
   stack: UiuaValue[];
   compiler: CompilerRef;
 }
 
+/**
+ * Run Uiua code with the given runtime and initial values.
+ * 
+ * @param runtime The runtime to run the code with.
+ * @param code The Uiua code to run.
+ * @param initialValues The initial values to start the stack with.
+ */
 export function runString(
+  runtime: UiuaRuntime,
   code: string,
-  initialValues: UiuaValue[],
-  runtime: UiuaRuntime
+  initialValues: UiuaValue[] = [],
 ): UiuaExecutionResult {
   const result = runCode(
     code,
@@ -29,7 +39,7 @@ export function runString(
   );
   
   return {
-    stack: result.stack.map((value: UiuaValueModel) => UiuaValue.fromModel(value)),
+    stack: result.stack.map(UiuaValue.fromModel),
     compiler: result.compiler,
   }
 }

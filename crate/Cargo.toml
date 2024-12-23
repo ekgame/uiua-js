@@ -21,8 +21,13 @@ serde_json = "1.0"
 getrandom = { version = "0.2", features = ["js"] }
 web-sys = { version = "0.3.70", features = [
     "Performance",
+    "Window",
+    "console",
 ] }
-uiua = { path = "../../uiua", default-features = false, features = ["batteries", "web"] }
+uiua = { path = "D:\\Dev\\uiua", default-features = false, features = [
+    "batteries",
+    "web",
+] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.13"

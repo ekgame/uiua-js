@@ -7,7 +7,7 @@ const code = `
 `;
 
 const runtime = new UiuaRuntime();
-const result = runString(code, [], runtime);
+const result = runString(runtime, code);
 console.log(result);
 
 const runtime2 = new UiuaRuntime();
@@ -16,10 +16,10 @@ const code2 = `
     Foo Bar 6
     Baz = 44
 `;
-const result2 = runString(code2, [], runtime2);
+const result2 = runString(runtime2, code2);
 console.log(result2);
 
 const runtime3 = new UiuaRuntime();
 runtime3.setCompiler(result2.compiler);
-const result3 = runString('Baz', [], runtime3);
+const result3 = runString(runtime3, 'Baz');
 console.log(result3);

@@ -1,9 +1,12 @@
+mod backend;
+
+use backend::ExternalBackendHandlers;
 use js_sys::Function;
 use serde::de::Deserializer;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use serde::Deserialize;
 use uiua::format::{format_str, FormatConfig, FormatOutput};
-use uiua::{Boxed, CodeSpan, Compiler, Loc, Uiua, Value};
+use uiua::{Boxed, CodeSpan, Compiler, IntoSysBackend, Loc, Uiua, Value};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "wee_alloc")]
@@ -435,6 +438,7 @@ impl From<Value> for UiuaValue {
 pub struct UiuaRuntimeInternal {
     bindings: Vec<JsBinding>,
     compiler: Option<CompilerRef>,
+    backend: ExternalBackendHandlers,
 }
 
 #[wasm_bindgen]
@@ -444,6 +448,7 @@ impl UiuaRuntimeInternal {
         UiuaRuntimeInternal {
             bindings: Vec::new(),
             compiler: None,
+            backend: ExternalBackendHandlers::default(),
         }
     }
 
@@ -456,6 +461,22 @@ impl UiuaRuntimeInternal {
     #[wasm_bindgen(js_name = setCompiler)]
     pub fn set_compiler(&mut self, compiler: &CompilerRef) {
         self.compiler = Some(compiler.clone());
+    }
+
+    #[wasm_bindgen(js_name = getBackend)]
+    pub fn get_backend(&self) -> ExternalBackendHandlers {
+        self.backend.clone()
+    }
+
+    #[wasm_bindgen(js_name = setBackend)]
+    pub fn set_backend(&mut self, backend: ExternalBackendHandlers) {
+        self.backend = backend;
+    }
+
+    fn build_uiua_backend(&self) -> impl IntoSysBackend {
+        let mut backend = backend::CustomBackend::new();
+        backend.set_backend(self.backend.clone());
+        backend
     }
 }
 
@@ -476,6 +497,7 @@ impl JsBinding {
 }
 
 #[wasm_bindgen]
+#[derive(Clone, Debug)]
 struct JsFunctionWrapper(Function);
 unsafe impl Send for JsFunctionWrapper {}
 unsafe impl Sync for JsFunctionWrapper {}
@@ -548,6 +570,7 @@ impl UiuaExecutionResultInternal {
     }
 }
 
+
 #[wasm_bindgen(js_name = runCode)]
 pub fn run_code(
     code: String,
@@ -555,23 +578,22 @@ pub fn run_code(
     runtime: UiuaRuntimeInternal,
 ) -> Result<UiuaExecutionResultInternal, JsValue> {
     let mut uiua = Uiua::with_safe_sys();
+    
     let mut compiler: Compiler = match runtime.compiler.as_ref() {
         Some(compiler) => compiler.compiler.clone(),
-        None => {
-            let mut compiler = Compiler::new();
-            runtime.bindings.into_iter().for_each(|binding| {
-                let callback = binding.callback;
-                let _ = compiler.create_bind_function(&binding.name, binding.signature, move |uiua| {
-                    let wrapped = UiuaRef::new(uiua);
-                    callback
-                        .call1(&JsValue::undefined(), &JsValue::from(wrapped))
-                        .unwrap();
-                    Ok(())
-                });
-            });
-            compiler
-        },
+        None => Compiler::with_backend(runtime.build_uiua_backend()),
     };
+
+    runtime.bindings.into_iter().for_each(|binding| {
+        let callback = binding.callback;
+        let _ = compiler.create_bind_function(&binding.name, binding.signature, move |uiua| {
+            let wrapped = UiuaRef::new(uiua);
+            callback
+                .call1(&JsValue::undefined(), &JsValue::from(wrapped))
+                .unwrap();
+            Ok(())
+        });
+    });
 
     // This line makes sure that if the compiler was used before, it won't rerun the previous code
     compiler.assembly_mut().root.clear();

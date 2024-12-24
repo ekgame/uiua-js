@@ -1,5 +1,6 @@
 import {
     CompilerRef,
+    ExternalBackendHandlers,
     UiuaRef,
     UiuaRuntimeInternal,
 } from "../crate/pkg/uiua_js";
@@ -39,8 +40,6 @@ export class UiuaRuntime {
     /**
      * Add a custom binding to the runtime.
      * Allows calling JavaScript code from Uiua runtime.
-     * 
-     * Note: that this is ignored if a custom compiler is set.
      */
     addBinding(name: string, inputs: number, outputs: number, callback: (uiua: Uiua) => void) {
         this.internal.addBinding(name, inputs, outputs, (ref: UiuaRef) => {
@@ -51,10 +50,21 @@ export class UiuaRuntime {
     /**
      * Set a custom compiler to the runtime.
      * This is useful for running Uiua code with the context of some previous code.
-     * 
-     * Note: that this discards any custom bindings defined for this runtime.
      */
     setCompiler(compiler: CompilerRef) {
         this.internal.setCompiler(compiler);
+    }
+
+    private modifyBackend(modifier: (backend: ExternalBackendHandlers) => ExternalBackendHandlers) {
+        const backend = modifier(this.internal.getBackend());
+        this.internal.setBackend(backend);
+    }
+
+    setPrintStrStdoutHandler(handler: (str: string) => void) {
+        this.modifyBackend(backend => backend.with_print_str_stdout_handler(handler));
+    }
+    
+    setPrintStrStderrHandler(handler: (str: string) => void) {
+        this.modifyBackend(backend => backend.with_print_str_stderr_handler(handler));
     }
 }

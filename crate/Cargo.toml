@@ -24,7 +24,7 @@ web-sys = { version = "0.3.70", features = [
     "Window",
     "console",
 ] }
-uiua = { path = "D:\\Dev\\uiua", default-features = false, features = [
+uiua = { path = "../../uiua", default-features = false, features = [
     "batteries",
     "web",
 ] }

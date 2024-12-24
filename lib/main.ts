@@ -18,6 +18,8 @@ await init();
 interface UiuaExecutionResult {
   stack: UiuaValue[];
   compiler: CompilerRef;
+  stdout: Uint8Array;
+  stderr: Uint8Array;
 }
 
 /**
@@ -41,5 +43,7 @@ export function runString(
   return {
     stack: result.stack.map(UiuaValue.fromModel),
     compiler: result.compiler,
+    stdout: result.stdout,
+    stderr: result.stderr,
   }
 }

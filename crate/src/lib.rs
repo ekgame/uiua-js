@@ -541,6 +541,8 @@ impl UiuaRef {
 pub struct UiuaExecutionResultInternal {
     stack: Vec<Value>,
     compiler: Compiler,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
 }
 
 #[wasm_bindgen]
@@ -567,6 +569,16 @@ impl UiuaExecutionResultInternal {
         CompilerRef {
             compiler: self.compiler.clone(),
         }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn stdout(&self) -> Vec<u8> {
+        self.stdout.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn stderr(&self) -> Vec<u8> {
+        self.stderr.clone()
     }
 }
 
@@ -617,9 +629,12 @@ pub fn run_code(
         return Err(JsError::from(err).into());
     }
 
+    let backend = uiua.downcast_backend::<backend::CustomBackend>().unwrap();
     let result = UiuaExecutionResultInternal {
         stack: uiua.stack().to_vec(),
         compiler,
+        stdout: backend.stdout(),
+        stderr: backend.stderr(),
     };
 
     Ok(result)

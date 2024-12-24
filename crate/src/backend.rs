@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use js_sys::Function;
+use js_sys::{Function, JsString, Reflect};
 use uiua::SysBackend;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
@@ -41,6 +41,22 @@ impl CustomBackend {
     pub fn set_backend(&mut self, backend: ExternalBackendHandlers) {
         self.backend = backend;
     }
+
+    pub fn stdout(&self) -> Vec<u8> {
+        self.stdout.lock().unwrap().clone()
+    }
+
+    pub fn stderr(&self) -> Vec<u8> {
+        self.stderr.lock().unwrap().clone()
+    }
+}
+
+fn format_error(error: JsValue) -> String {
+    if let Ok(message) = Reflect::get(&error, &JsString::from("message")) {
+        return message.as_string().unwrap_or("Unknown error".to_string());
+    }
+
+    "Unknown error".to_string()
 }
 
 impl SysBackend for CustomBackend {
@@ -53,28 +69,24 @@ impl SysBackend for CustomBackend {
     }
 
     fn print_str_stdout(&self, s: &str) -> Result<(), String> {
-        if let Ok(mut stdout) = self.stdout.lock() {
-            stdout.extend_from_slice(s.as_bytes());
-        } else {
-            return Err("Failed to lock stdout".to_string());
-        }
+        self.stdout.lock().unwrap().extend_from_slice(s.as_bytes());
 
         if let Some(handler) = &self.backend.print_str_stdout_handler {
-            let _ = handler.call1(&JsValue::undefined(), &JsValue::from(s));
+            if let Err(error) = handler.call1(&JsValue::undefined(), &JsValue::from(s)) {
+                return Err(format_error(error));
+            }
         }
 
         Ok(())
     }
 
     fn print_str_stderr(&self, s: &str) -> Result<(), String> {
-        if let Ok(mut stderr) = self.stderr.lock() {
-            stderr.extend_from_slice(s.as_bytes());
-        } else {
-            return Err("Failed to lock stderr".to_string());
-        }
+        self.stderr.lock().unwrap().extend_from_slice(s.as_bytes());
 
         if let Some(handler) = &self.backend.print_str_stderr_handler {
-            let _ = handler.call1(&JsValue::undefined(), &JsValue::from(s));
+            if let Err(error) = handler.call1(&JsValue::undefined(), &JsValue::from(s)) {
+                return Err(format_error(error));
+            }
         }
 
         Ok(())

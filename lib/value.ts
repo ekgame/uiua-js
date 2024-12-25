@@ -113,12 +113,21 @@ export class UiuaValue {
     }
 
     toModel(): UiuaValueModel {
+        let data = flattenArray(this.data);
+
+        if (this.type === "box") {
+            data = (data as unknown as UiuaValue[])
+                .map((value: UiuaValue) => value.toModel());
+        } else if (this.type === "char") {
+            data = [data];
+        }
+
         return {
             type: this.type,
             shape: this.shape,
             label: this.label,
             keys: this.keys ? this.keys.toModel() : null,
-            data: flattenArray(this.data) as any,
+            data: flattenArray(data) as any,
         };
     }
 
@@ -251,7 +260,7 @@ function flattenArray<T>(arr: UiuaArray<T>): T[] {
     if (typeof arr === "string") {
         return arr;
     }
-    
+
     if (!Array.isArray(arr)) {
         return [arr];
     }

@@ -25,9 +25,11 @@ const result = runString(runtime, `
 const runtime2 = new UiuaRuntime();
 runtime2.setCompiler(result.compiler);
 runtime2.setBackend(new TestBackend("[test 3]"));
-const results2 = runString(runtime2, `fixFoo`);
+const results2 = runString(runtime2, `
+map {} {}
+insert bothbox "this" range10
+`);
 
-console.log(results2.stack);
 results2.stack.forEach(value => {
     console.log(value.prettyFormat());
 });

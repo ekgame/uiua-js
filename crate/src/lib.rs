@@ -6,7 +6,7 @@ use serde::de::Deserializer;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use serde::Deserialize;
 use uiua::format::{format_str, FormatConfig, FormatOutput};
-use uiua::{Boxed, CodeSpan, Compiler, IntoSysBackend, Loc, Uiua, Value};
+use uiua::{Boxed, CodeSpan, Compiler, Loc, Uiua, Value};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "wee_alloc")]
@@ -196,21 +196,21 @@ enum UiuaValue {
 
 impl Into<Value> for UiuaValue {
     fn into(self) -> Value {
-        match self {
+        let mut value = match &self {
             UiuaValue::Byte(array) => Value::Byte(uiua::Array::new(
-                array.shape.into_iter().collect::<uiua::Shape>(),
+                array.shape.clone().into_iter().collect::<uiua::Shape>(),
                 array.data.as_slice(),
             )),
             UiuaValue::Num(array) => Value::Num(uiua::Array::new(
-                array.shape.into_iter().collect::<uiua::Shape>(),
+                array.shape.clone().into_iter().collect::<uiua::Shape>(),
                 array.data.as_slice(),
             )),
             UiuaValue::Char(array) => Value::Char(uiua::Array::new(
-                array.shape.into_iter().collect::<uiua::Shape>(),
+                array.shape.clone().into_iter().collect::<uiua::Shape>(),
                 array.data.as_slice(),
             )),
             UiuaValue::Complex(array) => Value::Complex(uiua::Array::new(
-                array.shape.into_iter().collect::<uiua::Shape>(),
+                array.shape.clone().into_iter().collect::<uiua::Shape>(),
                 array
                     .data
                     .iter()
@@ -219,7 +219,7 @@ impl Into<Value> for UiuaValue {
                     .as_slice(),
             )),
             UiuaValue::Box(array) => Value::Box(uiua::Array::new(
-                array.shape.into_iter().collect::<uiua::Shape>(),
+                array.shape.clone().into_iter().collect::<uiua::Shape>(),
                 array
                     .data
                     .iter()
@@ -227,7 +227,31 @@ impl Into<Value> for UiuaValue {
                     .collect::<Vec<Boxed>>()
                     .as_slice(),
             )),
+        };
+
+        let label = match &self {   
+            UiuaValue::Byte(array) => array.label.clone(),
+            UiuaValue::Num(array) => array.label.clone(),
+            UiuaValue::Char(array) => array.label.clone(),
+            UiuaValue::Complex(array) => array.label.clone(),
+            UiuaValue::Box(array) => array.label.clone(),
+        };
+
+        if let Some(label) = label {
+            value.meta_mut().label = Some(label.into());
         }
+
+        if let Some(keys) = match &self {
+            UiuaValue::Byte(array) => array.keys.clone(),
+            UiuaValue::Num(array) => array.keys.clone(),
+            UiuaValue::Char(array) => array.keys.clone(),
+            UiuaValue::Complex(array) => array.keys.clone(),
+            UiuaValue::Box(array) => array.keys.clone(),
+        } {
+            value.map((*keys).into(), &Uiua::with_safe_sys()).unwrap();
+        }
+
+        value
     }
 }
 
@@ -280,97 +304,92 @@ impl Serialize for UiuaValue {
     }
 }
 
-impl<'de> Deserialize<'de> for UiuaValue {
-    fn deserialize<D>(deserializer: D) -> Result<UiuaValue, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct UiuaArrayStruct {
-            data: Vec<serde_json::Value>,
-            shape: Vec<usize>,
-            label: Option<String>,
-            keys: Option<Box<UiuaValue>>,
-            #[serde(rename = "type")]
-            type_: String,
-        }
+#[derive(Deserialize, Debug)]
+struct UiuaArrayStruct {
+    data: Vec<serde_json::Value>,
+    shape: Vec<usize>,
+    label: Option<String>,
+    keys: Option<Box<UiuaArrayStruct>>,
+    #[serde(rename = "type")]
+    type_: String,
+}
 
-        let array: UiuaArrayStruct = Deserialize::deserialize(deserializer)?;
-
+impl From<UiuaArrayStruct> for UiuaValue {
+    fn from(array: UiuaArrayStruct) -> Self {
+        // web_sys::console::log_1(&format!("Converting array {:?}", array).into());
+        let keys = array.keys.map(|keys| Box::new(UiuaValue::from(*keys)));
         match array.type_.as_str() {
             "number" => {
                 let data = array
                     .data
                     .iter()
-                    .map(|v| {
-                        v.as_f64()
-                            .ok_or(serde::de::Error::custom("Expected number"))
-                    })
-                    .collect::<Result<Vec<f64>, _>>()?;
-                Ok(UiuaValue::Num(UiuaArray {
+                    .map(|v| v.as_f64().unwrap())
+                    .collect::<Vec<f64>>();
+                UiuaValue::Num(UiuaArray {
                     data,
                     shape: array.shape,
                     label: array.label,
-                    keys: array.keys,
-                }))
+                    keys: keys,
+                })
             }
             "char" => {
                 let data = array
                     .data
                     .iter()
-                    .map(|v| {
-                        v.as_str()
-                            .and_then(|s| s.chars().next())
-                            .ok_or(serde::de::Error::custom("Expected char"))
-                    })
-                    .collect::<Result<Vec<char>, _>>()?;
-                Ok(UiuaValue::Char(UiuaArray {
+                    .map(|v| v.as_str().unwrap().chars().next().unwrap())
+                    .collect::<Vec<char>>();
+                UiuaValue::Char(UiuaArray {
                     data,
                     shape: array.shape,
                     label: array.label,
-                    keys: array.keys,
-                }))
+                    keys: keys,
+                })
             }
             "complex" => {
                 let data = array
                     .data
                     .iter()
                     .map(|v| {
-                        let re = v[0]
-                            .as_f64()
-                            .ok_or(serde::de::Error::custom("Expected number"))?;
-                        let im = v[1]
-                            .as_f64()
-                            .ok_or(serde::de::Error::custom("Expected number"))?;
-                        Ok((re, im))
+                        let re = v[0].as_f64().unwrap();
+                        let im = v[1].as_f64().unwrap();
+                        (re, im)
                     })
-                    .collect::<Result<Vec<(f64, f64)>, _>>()?;
-                Ok(UiuaValue::Complex(UiuaArray {
+                    .collect::<Vec<(f64, f64)>>();
+                UiuaValue::Complex(UiuaArray {
                     data,
                     shape: array.shape,
                     label: array.label,
-                    keys: array.keys,
-                }))
+                    keys: keys,
+                })
             }
             "box" => {
                 let data = array
                     .data
                     .iter()
                     .map(|v| {
-                        let value: UiuaValue =
-                            serde_json::from_value(v.clone()).map_err(serde::de::Error::custom)?;
-                        Ok(Box::new(value))
+                        let value: UiuaValue = serde_json::from_value(v.clone()).unwrap();
+                        Box::new(value)
                     })
-                    .collect::<Result<Vec<Box<UiuaValue>>, _>>()?;
-                Ok(UiuaValue::Box(UiuaArray {
+                    .collect::<Vec<Box<UiuaValue>>>();
+                UiuaValue::Box(UiuaArray {
                     data,
                     shape: array.shape,
                     label: array.label,
-                    keys: array.keys,
-                }))
+                    keys: keys,
+                })
             }
-            _ => Err(serde::de::Error::custom("Invalid type")),
+            _ => panic!("Invalid type"),
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for UiuaValue {
+    fn deserialize<D>(deserializer: D) -> Result<UiuaValue, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let array: UiuaArrayStruct = Deserialize::deserialize(deserializer)?;
+        Ok(array.into())
     }
 }
 
@@ -582,7 +601,6 @@ impl UiuaExecutionResultInternal {
     }
 }
 
-
 #[wasm_bindgen(js_name = runCode)]
 pub fn run_code(
     code: String,
@@ -591,7 +609,7 @@ pub fn run_code(
 ) -> Result<UiuaExecutionResultInternal, JsValue> {
     let mut uiua = Uiua::with_safe_sys();
     let backend = runtime.build_uiua_backend();
-    
+
     let mut compiler: Compiler = match runtime.compiler.as_ref() {
         Some(compiler) => {
             let mut compiler = compiler.compiler.clone();

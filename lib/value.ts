@@ -1,3 +1,7 @@
+import {
+    prettyFormatValue,
+} from "../crate/pkg/uiua_js";
+
 interface UiuaArray<T> extends Array<T | UiuaArray<T>> { }
 
 type UiuaType = 'number' | 'char' | 'box' | 'complex'
@@ -116,6 +120,11 @@ export class UiuaValue {
             keys: this.keys ? this.keys.toModel() : null,
             data: flattenArray(this.data) as any,
         };
+    }
+
+    prettyFormat(): string {
+        console.log(this.toModel());
+        return prettyFormatValue(this.toModel());
     }
 
     static fromModel(model: UiuaValueModel): UiuaValue {
@@ -239,6 +248,10 @@ function getShape(item: any): number[] | null {
 }
 
 function flattenArray<T>(arr: UiuaArray<T>): T[] {
+    if (typeof arr === "string") {
+        return arr;
+    }
+    
     if (!Array.isArray(arr)) {
         return [arr];
     }

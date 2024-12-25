@@ -1,6 +1,5 @@
 import {
     CompilerRef,
-    ExternalBackendHandlers,
     UiuaRef,
     UiuaRuntimeInternal,
 } from "../crate/pkg/uiua_js";

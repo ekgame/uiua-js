@@ -644,3 +644,10 @@ pub fn run_code(
 
     Ok(result)
 }
+
+#[wasm_bindgen(js_name = prettyFormatValue)]
+pub fn pretty_format_value(value: JsValue) -> Result<String, JsValue> {
+    let value: UiuaValue = serde_wasm_bindgen::from_value(value)?;
+    let value: Value = value.into();
+    Ok(value.show())
+}

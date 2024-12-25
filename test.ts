@@ -21,9 +21,13 @@ const result = runString(runtime, `
     Foo = "Hello world"
     &p "Initialized"
 `);
-console.log(result);
 
 const runtime2 = new UiuaRuntime();
 runtime2.setCompiler(result.compiler);
-runtime2.setBackend(new TestBackend("[test 2]"));
-console.log(runString(runtime2, `&p Foo`));
+runtime2.setBackend(new TestBackend("[test 3]"));
+const results2 = runString(runtime2, `fixFoo`);
+
+console.log(results2.stack);
+results2.stack.forEach(value => {
+    console.log(value.prettyFormat());
+});

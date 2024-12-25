@@ -229,7 +229,7 @@ impl Into<Value> for UiuaValue {
             )),
         };
 
-        let label = match &self {   
+        let label = match &self {
             UiuaValue::Byte(array) => array.label.clone(),
             UiuaValue::Num(array) => array.label.clone(),
             UiuaValue::Char(array) => array.label.clone(),

@@ -38,7 +38,7 @@ export class UiuaValue {
         private _label: string | null,
         private _keys: UiuaValue | null,
         private _type: UiuaType,
-    ) {}
+    ) { }
 
     get data() {
         return this._data;
@@ -88,7 +88,7 @@ export class UiuaValue {
         return this.data;
     }
 
-    asNumberArray(): number[] {
+    asNumberArray(): UiuaArray<number> {
         if (this.type !== "number") {
             throw new Error("Can not convert a non-number value to a number array");
         }
@@ -117,7 +117,7 @@ export class UiuaValue {
             data: flattenArray(this.data) as any,
         };
     }
-    
+
     static fromModel(model: UiuaValueModel): UiuaValue {
         let data: any[] = model.data;
 
@@ -138,8 +138,25 @@ export class UiuaValue {
         return new UiuaValue(number, [], null, null, "number");
     }
 
-    static fromNumberArray(array: number[]) {
-        return new UiuaValue(array, [array.length], null, null, "number");
+    static fromNumberArray(array: UiuaArray<number>) {
+        const shape = getShape(array);
+        if (shape === null) {
+            throw new Error("Invalid shape of the array");
+        }
+
+        return new UiuaValue(array, shape, null, null, "number");
+    }
+
+    static fromBooleanArray(array: UiuaArray<boolean>) {
+        const shape = getShape(array);
+        if (shape === null) {
+            throw new Error("Invalid shape of the array");
+        }
+
+        const booleansAsNumbers = flattenArray(array).map((value) => (value ? 1 : 0));
+        const modifiedArray = reshapeArray(booleansAsNumbers, shape, "number");
+
+        return new UiuaValue(modifiedArray, shape, null, null, "number");
     }
 
     static fromString(string: string) {
@@ -178,59 +195,59 @@ function reshapeArray(array: any[], shape: number[], type: string): any[] {
 
 function getShape(item: any): number[] | null {
     if (typeof item === "number" || typeof item === "boolean") {
-      // Scalars have no dimensions
-      return [];
+        // Scalars have no dimensions
+        return [];
     }
-  
+
     if (typeof item === "object" && item !== null && "value" in item) {
-      // Boxed values have no dimensions
-      return [];
+        // Boxed values have no dimensions
+        return [];
     }
-  
+
     if (typeof item === "string") {
-      // Strings have a single dimension, the length of the string
-      return [item.length];
+        // Strings have a single dimension, the length of the string
+        return [item.length];
     }
-  
+
     if (!Array.isArray(item)) {
-      // Invalid type
-      return null;
+        // Invalid type
+        return null;
     }
-  
+
     if (item.length === 0) {
-      return [0];
+        return [0];
     }
-  
+
     const innerValueShapes = item.map(getShape);
     if (innerValueShapes.some((shape) => shape === null)) {
-      // Invalid shape of some inner value
-      return null;
+        // Invalid shape of some inner value
+        return null;
     }
-  
+
     const firstShape = innerValueShapes[0] as number[];
     const firstShapeString = JSON.stringify(innerValueShapes[0]);
     if (innerValueShapes.some((shape) => JSON.stringify(shape) !== firstShapeString)) {
-      // Inner values have different shapes
-      return null;
+        // Inner values have different shapes
+        return null;
     }
-  
+
     if (firstShapeString === "[]") {
-      return [item.length];
+        return [item.length];
     }
-  
+
     return [item.length, ...firstShape];
-  }
-  
-  function flattenArray<T>(arr: UiuaArray<T>): T[] {
+}
+
+function flattenArray<T>(arr: UiuaArray<T>): T[] {
     if (!Array.isArray(arr)) {
-      return [arr];
+        return [arr];
     }
-  
+
     return (arr as T[][]).reduce((acc, val) => {
-      const elements = flattenArray(val);
-      for (const element of elements) {
-        acc.push(element);
-      }
-      return acc;
+        const elements = flattenArray(val);
+        for (const element of elements) {
+            acc.push(element);
+        }
+        return acc;
     }, []);
-  }
+}

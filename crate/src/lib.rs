@@ -1,5 +1,7 @@
 mod backend;
 
+use std::time::Duration;
+
 use backend::ExternalBackendHandlers;
 use js_sys::Function;
 use serde::de::Deserializer;
@@ -458,6 +460,7 @@ pub struct UiuaRuntimeInternal {
     bindings: Vec<JsBinding>,
     compiler: Option<CompilerRef>,
     backend: ExternalBackendHandlers,
+    execution_limit_seconds: Option<f64>,
 }
 
 #[wasm_bindgen]
@@ -468,6 +471,7 @@ impl UiuaRuntimeInternal {
             bindings: Vec::new(),
             compiler: None,
             backend: ExternalBackendHandlers::default(),
+            execution_limit_seconds: None,
         }
     }
 
@@ -490,6 +494,11 @@ impl UiuaRuntimeInternal {
     #[wasm_bindgen(js_name = setBackend)]
     pub fn set_backend(&mut self, backend: ExternalBackendHandlers) {
         self.backend = backend;
+    }
+
+    #[wasm_bindgen(js_name = setExecutionLimitSeconds)]
+    pub fn set_execution_limit_seconds(&mut self, seconds: f64) {
+        self.execution_limit_seconds = Some(seconds);
     }
 
     fn build_uiua_backend(&self) -> backend::CustomBackend {
@@ -608,6 +617,11 @@ pub fn run_code(
     runtime: UiuaRuntimeInternal,
 ) -> Result<UiuaExecutionResultInternal, JsValue> {
     let mut uiua = Uiua::with_safe_sys();
+
+    if let Some(seconds) = runtime.execution_limit_seconds.clone() {
+        uiua = uiua.with_execution_limit(Duration::from_secs_f64(seconds));
+    }
+
     let backend = runtime.build_uiua_backend();
 
     let mut compiler: Compiler = match runtime.compiler.as_ref() {

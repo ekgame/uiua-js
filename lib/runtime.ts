@@ -9,7 +9,7 @@ import { UiuaValue } from "./value";
 
 /**
  * An instance of this class is available for the callbacks of custom bindings
- * to interact with the Uiua at runtime.
+ * to interact with Uiua stack at runtime.
  */
 class Uiua {
     private ref: UiuaRef;
@@ -70,5 +70,9 @@ export class UiuaRuntime {
         internalBackend = internalBackend.with_print_str_stdout_handler(backend.printStrStdout.bind(backend));
         internalBackend = internalBackend.with_print_str_stderr_handler(backend.printStrStderr.bind(backend));
         this.internal.setBackend(internalBackend);
+    }
+
+    setExecutionLimit(seconds: number) {
+        this.internal.setExecutionLimitSeconds(seconds);
     }
 }

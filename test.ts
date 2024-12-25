@@ -17,23 +17,10 @@ class TestBackend extends AbstractBackend {
 
 const runtime = new UiuaRuntime();
 runtime.setBackend(new TestBackend("[test 1]"));
+runtime.setExecutionLimit(5)
+
 const result = runString(runtime, `
-    Foo = "Hello world"
-    &p "Initialized"
+    do()1
 `);
 
-const runtime2 = new UiuaRuntime();
-runtime2.setCompiler(result.compiler);
-runtime2.setBackend(new TestBackend("[test 2]"));
-const results2 = runString(runtime2, `
-&p "Hello world"
-
-map {} {}
-insert bothbox "this" range10
-insert bothbox "is" reshape 3_4 range10
-$baz
-`);
-
-results2.stack.forEach(value => {
-    console.log(value.prettyFormat());
-});
+console.log(result);

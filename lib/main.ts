@@ -4,7 +4,7 @@ import init, {
 } from "../crate/pkg/uiua_js";
 
 import { UiuaRuntime } from "./runtime";
-import { UiuaValue, UiuaValueModel } from "./value";
+import { UiuaValue } from "./value";
 
 export { UiuaRuntime } from "./runtime";
 export { UiuaValue } from "./value";
@@ -45,5 +45,5 @@ export function runString(
     compiler: result.compiler,
     stdout: result.stdout,
     stderr: result.stderr,
-  }
+  };
 }

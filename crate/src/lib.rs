@@ -473,7 +473,7 @@ impl UiuaRuntimeInternal {
         self.backend = backend;
     }
 
-    fn build_uiua_backend(&self) -> impl IntoSysBackend {
+    fn build_uiua_backend(&self) -> backend::CustomBackend {
         let mut backend = backend::CustomBackend::new();
         backend.set_backend(self.backend.clone());
         backend
@@ -590,10 +590,15 @@ pub fn run_code(
     runtime: UiuaRuntimeInternal,
 ) -> Result<UiuaExecutionResultInternal, JsValue> {
     let mut uiua = Uiua::with_safe_sys();
+    let backend = runtime.build_uiua_backend();
     
     let mut compiler: Compiler = match runtime.compiler.as_ref() {
-        Some(compiler) => compiler.compiler.clone(),
-        None => Compiler::with_backend(runtime.build_uiua_backend()),
+        Some(compiler) => {
+            let mut compiler = compiler.compiler.clone();
+            compiler.set_backend(backend);
+            compiler
+        }
+        None => Compiler::with_backend(backend),
     };
 
     runtime.bindings.into_iter().for_each(|binding| {

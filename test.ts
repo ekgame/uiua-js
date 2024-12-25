@@ -1,22 +1,29 @@
 import { AbstractBackend } from "./lib/backend";
-import { runString, UiuaRuntime, UiuaValue } from "./lib/main";
+import { runString, UiuaRuntime } from "./lib/main";
 
 class TestBackend extends AbstractBackend {
+    constructor(private prefix: string) {
+        super();
+    }
+
     printStrStdout(str: string) {
-        console.log(str);
+        console.log(this.prefix + ' ' + str);
     }
 
     printStrStderr(str: string) {
-        console.error(str);
+        console.error(this.prefix + ' ' + str);
     }
 }
 
 const runtime = new UiuaRuntime();
-runtime.setBackend(new TestBackend());
-
+runtime.setBackend(new TestBackend("[test 1]"));
 const result = runString(runtime, `
-    &w "Hello from Uiua" 2
-    # &w "Hello from Uiua" 1
+    Foo = "Hello world"
+    &p "Initialized"
 `);
-
 console.log(result);
+
+const runtime2 = new UiuaRuntime();
+runtime2.setCompiler(result.compiler);
+runtime2.setBackend(new TestBackend("[test 2]"));
+console.log(runString(runtime2, `&p Foo`));

@@ -33,8 +33,6 @@ class Uiua {
  */
 export class UiuaRuntime {
     internal: UiuaRuntimeInternal;
-    private isCustomCompilerSet = false;
-    private isCustomBackendSet = false;
 
     constructor() {
         this.internal = new UiuaRuntimeInternal();
@@ -56,34 +54,22 @@ export class UiuaRuntime {
 
     /**
      * Set a custom compiler to the runtime. This is useful for running Uiua code with the context of some previous code.
-     * Throws an error if a custom backend is already set.
      * 
      * @param compiler The compiler to use.
      */
     setCompiler(compiler: CompilerRef) {
-        if (this.isCustomBackendSet) {
-            throw new Error("Can not set a custom compiler for a runtime with a custom backend. Persisted compiler will have a backend set already.");
-        }
-
         this.internal.setCompiler(compiler);
-        this.isCustomCompilerSet = true;
     }
 
     /**
      * Set a custom backend to use for execution.
-     * Throws an error if a custom compiler is already set.
      * 
      * @param backend The backend to use.
      */
     setBackend(backend: AbstractBackend) {
-        if (this.isCustomCompilerSet) {
-            throw new Error("Can not set a custom backend for a runtime with a custom compiler. Persisted compiler will have a backend set already.");
-        }
-
         let internalBackend = this.internal.getBackend();
-        internalBackend = internalBackend.with_print_str_stdout_handler(backend.printStrStdout)
-        internalBackend = internalBackend.with_print_str_stderr_handler(backend.printStrStderr)
+        internalBackend = internalBackend.with_print_str_stdout_handler(backend.printStrStdout.bind(backend));
+        internalBackend = internalBackend.with_print_str_stderr_handler(backend.printStrStderr.bind(backend));
         this.internal.setBackend(internalBackend);
-        this.isCustomBackendSet = true;
     }
 }

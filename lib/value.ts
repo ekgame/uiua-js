@@ -132,7 +132,6 @@ export class UiuaValue {
     }
 
     prettyFormat(): string {
-        console.log(this.toModel());
         return prettyFormatValue(this.toModel());
     }
 

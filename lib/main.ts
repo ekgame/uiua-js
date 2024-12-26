@@ -45,5 +45,6 @@ export function runString(
     compiler: result.compiler,
     stdout: result.stdout,
     stderr: result.stderr,
+    diagnostics: result.diagnostics,
   };
 }

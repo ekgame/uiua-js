@@ -20,7 +20,7 @@ runtime.setBackend(new TestBackend("[test 1]"));
 runtime.setExecutionLimit(5)
 
 const result = runString(runtime, `
-    do()1
+    firstrev [1 2 3]
 `);
 
 console.log(result);

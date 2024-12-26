@@ -8,7 +8,7 @@ use serde::de::Deserializer;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use serde::Deserialize;
 use uiua::format::{format_str, FormatConfig, FormatOutput};
-use uiua::{Boxed, CodeSpan, Compiler, Loc, Uiua, Value};
+use uiua::{Boxed, CodeSpan, Compiler, Diagnostic, InputSrc, Loc, Span, Uiua, Value};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "wee_alloc")]
@@ -58,7 +58,7 @@ impl FormatConfigStruct {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct DocumentLocation {
     pub line: u16,
     pub column: u16,
@@ -80,8 +80,60 @@ impl DocumentLocation {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone)]
+pub enum UiuaInputSource {
+    String(usize),
+    File(String),
+    Macro(Box<DocumentSpan>),
+    Builtin,
+}
+
+impl From<InputSrc> for UiuaInputSource {
+    fn from(src: InputSrc) -> Self {
+        match src {
+            InputSrc::Str(id) => UiuaInputSource::String(id),
+            InputSrc::File(path) => UiuaInputSource::File((*path).to_string_lossy().to_string()),
+            InputSrc::Macro(src) => UiuaInputSource::Macro(Box::new(DocumentSpan::from(*src))),
+        }
+    }
+}
+
+impl Serialize for UiuaInputSource {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            UiuaInputSource::String(id) => {
+                let mut struct_ser = serializer.serialize_struct("UiuaInputSource", 2)?;
+                struct_ser.serialize_field("type", &"string")?;
+                struct_ser.serialize_field("id", id)?;
+                struct_ser.end()
+            }
+            UiuaInputSource::File(path) => {
+                let mut struct_ser = serializer.serialize_struct("UiuaInputSource", 2)?;
+                struct_ser.serialize_field("type", &"file")?;
+                struct_ser.serialize_field("path", path)?;
+                struct_ser.end()
+            }
+            UiuaInputSource::Macro(span) => {
+                let mut struct_ser = serializer.serialize_struct("UiuaInputSource", 2)?;
+                struct_ser.serialize_field("type", &"macro")?;
+                struct_ser.serialize_field("span", span)?;
+                struct_ser.end()
+            }
+            UiuaInputSource::Builtin => {
+                let mut struct_ser = serializer.serialize_struct("UiuaInputSource", 1)?;
+                struct_ser.serialize_field("type", &"builtin")?;
+                struct_ser.end()
+            }
+        }
+    }
+}
+
+#[derive(serde::Serialize, Clone)]
 pub struct DocumentSpan {
+    pub src: UiuaInputSource, 
     pub from: DocumentLocation,
     pub to: DocumentLocation,
 }
@@ -89,6 +141,7 @@ pub struct DocumentSpan {
 impl DocumentSpan {
     fn fix_column(&self) -> Self {
         DocumentSpan {
+            src: self.src.clone().into(),
             from: self.from.decrement_column(),
             to: self.to.decrement_column(),
         }
@@ -98,8 +151,22 @@ impl DocumentSpan {
 impl From<CodeSpan> for DocumentSpan {
     fn from(span: CodeSpan) -> Self {
         DocumentSpan {
+            src: span.src.into(),
             from: span.start.into(),
             to: span.end.into(),
+        }
+    }
+}
+
+impl From<Span> for DocumentSpan {
+    fn from(span: Span) -> Self {
+        match span {
+            Span::Code(span) => DocumentSpan::from(span),
+            Span::Builtin => DocumentSpan {
+                src: UiuaInputSource::Builtin,
+                from: DocumentLocation { line: 0, column: 0 },
+                to: DocumentLocation { line: 0, column: 0 },
+            },
         }
     }
 }
@@ -113,7 +180,7 @@ impl From<Loc> for DocumentLocation {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize)]
 pub struct GlyphMapping {
     pub span_from: DocumentSpan,
     pub span_to: DocumentSpan,
@@ -124,6 +191,7 @@ impl From<(&CodeSpan, (Loc, Loc))> for GlyphMapping {
         GlyphMapping {
             span_from: DocumentSpan::from(span.clone()).fix_column(),
             span_to: DocumentSpan {
+                src: span.src.clone().into(),
                 from: DocumentLocation::from(from).add_line(1),
                 to: DocumentLocation::from(to).add_line(1),
             },
@@ -131,7 +199,7 @@ impl From<(&CodeSpan, (Loc, Loc))> for GlyphMapping {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize)]
 pub struct FormatOutputStruct {
     pub output: String,
     pub glyph_map: Vec<GlyphMapping>,
@@ -571,6 +639,7 @@ pub struct UiuaExecutionResultInternal {
     compiler: Compiler,
     stdout: Vec<u8>,
     stderr: Vec<u8>,
+    diagnostics: Vec<Diagnostic>,
 }
 
 #[wasm_bindgen]
@@ -607,6 +676,51 @@ impl UiuaExecutionResultInternal {
     #[wasm_bindgen(getter)]
     pub fn stderr(&self) -> Vec<u8> {
         self.stderr.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn diagnostics(&self) -> JsValue {
+        let diagnostics = self
+            .diagnostics
+            .iter()
+            .map(|diagnostic| UiuaDiagnostic::from(diagnostic.clone()))
+            .collect::<Vec<UiuaDiagnostic>>();
+
+        serde_wasm_bindgen::to_value(&diagnostics).unwrap()
+    }
+}
+
+#[derive(serde::Serialize)]
+struct UiuaDiagnostic {
+    pub message: String,
+    pub span: DocumentSpan,
+    pub kind: UiuaDiagnosticKind,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+enum UiuaDiagnosticKind {
+    #[serde(rename = "info")]
+    Info,
+    #[serde(rename = "style")]
+    Style,
+    #[serde(rename = "advice")]
+    Advice,
+    #[serde(rename = "warning")]
+    Warning,
+}
+
+impl From<Diagnostic> for UiuaDiagnostic {
+    fn from(diagnostic: Diagnostic) -> Self {
+        UiuaDiagnostic {
+            message: diagnostic.message,
+            span: DocumentSpan::from(diagnostic.span),
+            kind: match diagnostic.kind {
+                uiua::DiagnosticKind::Info => UiuaDiagnosticKind::Info,
+                uiua::DiagnosticKind::Style => UiuaDiagnosticKind::Style,
+                uiua::DiagnosticKind::Advice => UiuaDiagnosticKind::Advice,
+                uiua::DiagnosticKind::Warning => UiuaDiagnosticKind::Warning,
+            },
+        }
     }
 }
 
@@ -666,12 +780,14 @@ pub fn run_code(
         return Err(JsError::from(err).into());
     }
 
+    let diagnostics: Vec<Diagnostic> = compiler.take_diagnostics().into_iter().collect();
     let backend = uiua.downcast_backend::<backend::CustomBackend>().unwrap();
     let result = UiuaExecutionResultInternal {
         stack: uiua.stack().to_vec(),
         compiler,
         stdout: backend.stdout(),
         stderr: backend.stderr(),
+        diagnostics,
     };
 
     Ok(result)

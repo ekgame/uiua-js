@@ -8,7 +8,9 @@ use serde::de::Deserializer;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use serde::Deserialize;
 use uiua::format::{format_str, FormatConfig, FormatOutput};
-use uiua::{Boxed, CodeSpan, Compiler, Diagnostic, InputSrc, Loc, Span, Uiua, Value};
+use uiua::{
+    Boxed, CodeSpan, Compiler, Diagnostic, InputSrc, Loc, Span, TraceFrame, Uiua, UiuaError, Value,
+};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "wee_alloc")]
@@ -133,7 +135,7 @@ impl Serialize for UiuaInputSource {
 
 #[derive(serde::Serialize, Clone)]
 pub struct DocumentSpan {
-    pub src: UiuaInputSource, 
+    pub src: UiuaInputSource,
     pub from: DocumentLocation,
     pub to: DocumentLocation,
 }
@@ -615,12 +617,12 @@ impl UiuaRef {
         UiuaRef { uiua }
     }
 
-    pub fn pop(&mut self) -> Result<JsValue, JsError> {
+    pub fn pop(&mut self) -> Result<JsValue, JsValue> {
         let uiua = unsafe { &mut *self.uiua };
         let result = uiua.pop(()).map(|value| UiuaValue::from(value));
         match result {
             Ok(value) => Ok(serde_wasm_bindgen::to_value(&value)?),
-            Err(err) => Err(JsError::from(err).into()),
+            Err(err) => Err(to_js_error(err)),
         }
     }
 
@@ -724,6 +726,53 @@ impl From<Diagnostic> for UiuaDiagnostic {
     }
 }
 
+#[derive(serde::Serialize)]
+struct UiuaTraceFrame {
+    pub line: String,
+    pub span: DocumentSpan,
+}
+
+impl From<TraceFrame> for UiuaTraceFrame {
+    fn from(frame: TraceFrame) -> Self {
+        let message = match (&frame.id, &frame.span) {
+            (Some(id), Span::Code(span)) => format!("in {id} at {span}"),
+            (Some(id), Span::Builtin) => format!("in {id}"),
+            (None, Span::Code(span)) => format!("at {span}"),
+            (None, Span::Builtin) => "<omitted>".to_owned(),
+        };
+
+        UiuaTraceFrame {
+            line: message,
+            span: DocumentSpan::from(frame.span),
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+struct SimplifiedUiuaError {
+    pub message: String,
+    pub trace: Vec<UiuaTraceFrame>,
+}
+
+impl From<UiuaError> for SimplifiedUiuaError {
+    fn from(err: UiuaError) -> Self {
+        SimplifiedUiuaError {
+            message: err.to_string(),
+            trace: err
+                .trace
+                .iter()
+                .map(|frame| UiuaTraceFrame::from(frame.clone()))
+                .collect(),
+        }
+    }
+}
+
+fn to_js_error(err: UiuaError) -> JsValue {
+    serde_wasm_bindgen::to_value(&SimplifiedUiuaError::from(err))
+        .unwrap()
+        .into()
+}
+
 #[wasm_bindgen(js_name = runCode)]
 pub fn run_code(
     code: String,
@@ -765,7 +814,7 @@ pub fn run_code(
     let result = compiler.load_str(code.as_str());
 
     if let Err(err) = result {
-        return Err(JsError::from(err).into());
+        return Err(to_js_error(err));
     }
 
     initial_values.into_iter().for_each(|value| {
@@ -777,7 +826,7 @@ pub fn run_code(
     let result = uiua.run_compiler(&mut compiler);
 
     if let Err(err) = result {
-        return Err(JsError::from(err).into());
+        return Err(to_js_error(err));
     }
 
     let diagnostics: Vec<Diagnostic> = compiler.take_diagnostics().into_iter().collect();

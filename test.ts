@@ -1,5 +1,5 @@
 import { AbstractBackend } from "./lib/backend";
-import { UiuaRuntime } from "./lib/main";
+import { UiuaRuntime, UiuaValue } from "./lib/main";
 
 class TestBackend extends AbstractBackend {
     constructor(private prefix: string) {
@@ -23,3 +23,6 @@ const result = runtime.runString(`
     box 5
 `);
 console.log(result.stack.map(x => x.toSmartValue()));
+
+// const test = UiuaValue.fromStringArray(["foo", "bar", "baz", "qux"]);
+// console.log(test.toSmartValue());

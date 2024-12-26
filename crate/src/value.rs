@@ -134,7 +134,7 @@ impl Serialize for UiuaValue {
 
 #[derive(Deserialize, Debug)]
 pub struct UiuaArrayStruct {
-    data: Vec<serde_json::Value>,
+    data: serde_json::Value,
     shape: Vec<usize>,
     label: Option<String>,
     keys: Option<Box<UiuaArrayStruct>>,
@@ -144,63 +144,39 @@ pub struct UiuaArrayStruct {
 
 impl From<UiuaArrayStruct> for UiuaValue {
     fn from(array: UiuaArrayStruct) -> Self {
-        // web_sys::console::log_1(&format!("Converting array {:?}", array).into());
         let keys = array.keys.map(|keys| Box::new(UiuaValue::from(*keys)));
         match array.type_.as_str() {
             "number" => {
-                let data = array
-                    .data
-                    .iter()
-                    .map(|v| v.as_f64().unwrap())
-                    .collect::<Vec<f64>>();
+                let data: Vec<f64> = serde_json::from_value(array.data).unwrap();
                 UiuaValue::Num(UiuaArray {
                     data,
                     shape: array.shape,
                     label: array.label,
-                    keys: keys,
+                    keys,
                 })
             }
             "char" => {
-                let data = array
-                    .data
-                    .iter()
-                    .map(|v| v.as_str().unwrap().chars().next().unwrap())
-                    .collect::<Vec<char>>();
+                let data: String = serde_json::from_value(array.data).unwrap();
                 UiuaValue::Char(UiuaArray {
-                    data,
+                    data: data.chars().collect(),
                     shape: array.shape,
                     label: array.label,
-                    keys: keys,
+                    keys,
                 })
             }
             "complex" => {
-                let data = array
-                    .data
-                    .iter()
-                    .map(|v| {
-                        let re = v[0].as_f64().unwrap();
-                        let im = v[1].as_f64().unwrap();
-                        (re, im)
-                    })
-                    .collect::<Vec<(f64, f64)>>();
+                let data: Vec<(f64, f64)> = serde_json::from_value(array.data).unwrap();
                 UiuaValue::Complex(UiuaArray {
                     data,
                     shape: array.shape,
                     label: array.label,
-                    keys: keys,
+                    keys,
                 })
             }
             "box" => {
-                let data = array
-                    .data
-                    .iter()
-                    .map(|v| {
-                        let value: UiuaValue = serde_json::from_value(v.clone()).unwrap();
-                        Box::new(value)
-                    })
-                    .collect::<Vec<Box<UiuaValue>>>();
+                let data: Vec<UiuaValue> = serde_json::from_value(array.data).unwrap();
                 UiuaValue::Box(UiuaArray {
-                    data,
+                    data: data.into_iter().map(|v| Box::new(v)).collect(),
                     shape: array.shape,
                     label: array.label,
                     keys: keys,

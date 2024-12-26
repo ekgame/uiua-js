@@ -3,7 +3,26 @@ import {
     toSmartValue,
 } from "../crate/pkg/uiua_js";
 
-interface UiuaArray<T> extends Array<T | UiuaArray<T>> { }
+type UiuaArray<T> = T
+    | T[]
+    | T[][]
+    | T[][][]
+    | T[][][][]
+    | T[][][][][]
+    | T[][][][][][]
+    | T[][][][][][][]
+    | T[][][][][][][][]
+    | T[][][][][][][][][]
+    | T[][][][][][][][][][]
+    | T[][][][][][][][][][][]
+    | T[][][][][][][][][][][][]
+    | T[][][][][][][][][][][][][]
+    | T[][][][][][][][][][][][][][]
+    | T[][][][][][][][][][][][][][][]
+    | T[][][][][][][][][][][][][][][][]
+    | T[][][][][][][][][][][][][][][][][]
+    | T[][][][][][][][][][][][][][][][][][]
+    | T[][][][][][][][][][][][][][][][][][][];
 
 type UiuaType = 'number' | 'char' | 'box' | 'complex'
 
@@ -64,35 +83,37 @@ export type SmartValue = SmartValuePng | SmartValueGif | SmartValueWav | SmartVa
 
 export class UiuaValue {
     private constructor(
-        private _data: any,
-        private _shape: number[],
-        private _label: string | null,
-        private _keys: UiuaValue | null,
-        private _type: UiuaType,
+        private _model: UiuaValueModel,
     ) { }
 
     get data() {
-        return this._data;
+        return reshapeArray(this._model.data, this._model.shape, this._model.type);
     }
 
     get shape() {
-        return this._shape;
+        return this._model.shape;
     }
 
     get label() {
-        return this._label;
+        return this._model.label;
     }
 
     get keys() {
-        return this._keys;
+        return this._model.keys ? UiuaValue.fromModel(this._model.keys) : null;
     }
 
     get type() {
-        return this._type;
+        return this._model.type;
     }
 
     box(): UiuaValue {
-        return new UiuaValue(this, [], this.label, null, "box");
+        return new UiuaValue({
+            type: "box",
+            data: [this],
+            shape: [],
+            label: null,
+            keys: null,
+        });
     }
 
     unbox(): UiuaValue {
@@ -104,7 +125,7 @@ export class UiuaValue {
             throw new Error("Cannot unbox a non-scalar value");
         }
 
-        return this._data;
+        return this.data[0];
     }
 
     asNumber(): number {
@@ -140,22 +161,7 @@ export class UiuaValue {
     }
 
     toModel(): UiuaValueModel {
-        let data = flattenArray(this.data);
-
-        if (this.type === "box") {
-            data = (data as unknown as UiuaValue[])
-                .map((value: UiuaValue) => value.toModel());
-        } else if (this.type === "char") {
-            data = [data];
-        }
-
-        return {
-            type: this.type,
-            shape: this.shape,
-            label: this.label,
-            keys: this.keys ? this.keys.toModel() : null,
-            data: flattenArray(data) as any,
-        };
+        return this._model;
     }
 
     prettyFormat(): string {
@@ -164,7 +170,7 @@ export class UiuaValue {
 
     toSmartValue(): SmartValue {
         const result = toSmartValue(this.toModel());
-        
+
         if (result.type === "normal") {
             return {
                 type: "normal",
@@ -176,23 +182,17 @@ export class UiuaValue {
     }
 
     static fromModel(model: UiuaValueModel): UiuaValue {
-        let data: any[] = model.data;
-
-        if (model.type === "box") {
-            data = data.map(UiuaValue.fromModel);
-        }
-
-        return new UiuaValue(
-            reshapeArray(data, model.shape, model.type),
-            model.shape,
-            model.label || null,
-            model.keys ? UiuaValue.fromModel(model.keys) : null,
-            model.type,
-        );
+        return new UiuaValue(model);
     }
 
     static fromNumber(number: number) {
-        return new UiuaValue(number, [], null, null, "number");
+        return new UiuaValue({
+            type: "number",
+            data: [number],
+            shape: [],
+            label: null,
+            keys: null,
+        });
     }
 
     static fromNumberArray(array: UiuaArray<number>) {
@@ -201,7 +201,13 @@ export class UiuaValue {
             throw new Error("Invalid shape of the array");
         }
 
-        return new UiuaValue(array, shape, null, null, "number");
+        return new UiuaValue({
+            type: "number",
+            data: array,
+            shape,
+            label: null,
+            keys: null,
+        });
     }
 
     static fromBooleanArray(array: UiuaArray<boolean>) {
@@ -210,18 +216,42 @@ export class UiuaValue {
             throw new Error("Invalid shape of the array");
         }
 
-        const booleansAsNumbers = flattenArray(array).map((value) => (value ? 1 : 0));
-        const modifiedArray = reshapeArray(booleansAsNumbers, shape, "number");
-
-        return new UiuaValue(modifiedArray, shape, null, null, "number");
+        return new UiuaValue({
+            type: "number",
+            data: flattenArray(array, "number").map((value) => (value ? 1 : 0)),
+            shape,
+            label: null,
+            keys: null,
+        });
     }
 
     static fromString(string: string) {
-        return new UiuaValue(string, [string.length], null, null, "char");
+        return new UiuaValue({
+            type: "char",
+            data: string,
+            shape: [string.length],
+            label: null,
+            keys: null,
+        });
+    }
+
+    static fromStringArray(array: UiuaArray<string>) {
+        const shape = getShape(array);
+        if (shape === null) {
+            throw new Error("Invalid shape of the array");
+        }
+
+        return new UiuaValue({
+            type: "char",
+            data: flattenArray(array, "char"),
+            shape,
+            label: null,
+            keys: null,
+        });
     }
 }
 
-function reshapeArray(array: any[], shape: number[], type: string): any[] {
+function reshapeArray(array: any, shape: number[], type: string): any {
     let index = 0;
 
     function nest(currentShape: number[]) {
@@ -295,7 +325,7 @@ function getShape(item: any): number[] | null {
     return [item.length, ...firstShape];
 }
 
-function flattenArray<T>(arr: UiuaArray<T>): T[] {
+function flattenArray<T>(arr: any, type: UiuaType): any {
     if (typeof arr === "string") {
         return arr;
     }
@@ -304,11 +334,22 @@ function flattenArray<T>(arr: UiuaArray<T>): T[] {
         return [arr];
     }
 
-    return (arr as T[][]).reduce((acc, val) => {
-        const elements = flattenArray(val);
-        for (const element of elements) {
-            acc.push(element);
+    if (type === 'char') {
+        let accumulator = '';
+        for (const element of arr) {
+            const flattened = flattenArray(element, type);
+            for (const value of flattened) {
+                accumulator += value;
+            }
         }
-        return acc;
-    }, []);
+        return accumulator;
+    } else {
+        return (arr as T[][]).reduce((acc, val) => {
+            const elements = flattenArray(val, type);
+            for (const element of elements) {
+                acc.push(element);
+            }
+            return acc;
+        }, []);
+    }
 }

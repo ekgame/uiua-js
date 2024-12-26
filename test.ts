@@ -1,5 +1,5 @@
 import { AbstractBackend } from "./lib/backend";
-import { runString, UiuaRuntime } from "./lib/main";
+import { UiuaRuntime } from "./lib/main";
 
 class TestBackend extends AbstractBackend {
     constructor(private prefix: string) {
@@ -17,12 +17,9 @@ class TestBackend extends AbstractBackend {
 
 const runtime = new UiuaRuntime();
 runtime.setBackend(new TestBackend("[test 1]"));
-runtime.setExecutionLimit(5)
-
-const result = runString(runtime, `
+const result = runtime.runString(`
     Music
     Lena
     box 5
 `);
-
 console.log(result.stack.map(x => x.toSmartValue()));

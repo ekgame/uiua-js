@@ -2,6 +2,7 @@ import {
     CompilerRef,
     UiuaRef,
     UiuaRuntimeInternal,
+    runCode,
 } from "../crate/pkg/uiua_js";
 import { AbstractBackend } from "./backend";
 
@@ -28,13 +29,91 @@ class Uiua {
 }
 
 /**
+ * The result after Uiua code is executed.
+ */
+interface UiuaExecutionResult {
+    stack: UiuaValue[];
+    compiler: CompilerRef;
+    stdout: Uint8Array;
+    stderr: Uint8Array;
+    diagnostics: UiuaDiagnostic[];
+}
+
+interface DocumentLocation {
+    line: number;
+    column: number;
+}
+
+interface InputSourceBase {
+    type: "string" | "file" | "macro" | "builtin";
+}
+
+interface InputSourceString extends InputSourceBase {
+    type: "string";
+    id: number;
+}
+
+interface InputSourceFile extends InputSourceBase {
+    type: "file";
+    path: String;
+}
+
+interface InputSourceMacro extends InputSourceBase {
+    type: "macro";
+    span: Span;
+}
+
+interface InputSourceBuiltin extends InputSourceBase {
+    type: "builtin";
+}
+
+type InputSource = InputSourceString | InputSourceFile | InputSourceMacro | InputSourceBuiltin;
+
+interface Span {
+    src: InputSource;
+    from: DocumentLocation;
+    to: DocumentLocation;
+}
+
+interface UiuaDiagnostic {
+    message: string;
+    kind: "info" | "style" | "warning" | "advice";
+    span: Span;
+}
+
+/**
  * The context for running Uiua code.
  */
 export class UiuaRuntime {
-    internal: UiuaRuntimeInternal;
+    private internal: UiuaRuntimeInternal;
 
     constructor() {
         this.internal = new UiuaRuntimeInternal();
+    }
+
+    /**
+     * Run Uiua code with the given runtime and initial values.
+     * 
+     * @param code The Uiua code to run.
+     * @param initialValues The initial values to start the stack with.
+     */
+    runString(
+        code: string,
+        initialValues: UiuaValue[] = [],
+    ): UiuaExecutionResult {
+        const result = runCode(
+            code,
+            initialValues.map(value => value.toModel()),
+            this.internal
+        );
+
+        return {
+            stack: result.stack.map(UiuaValue.fromModel),
+            compiler: result.compiler,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            diagnostics: result.diagnostics,
+        };
     }
 
     /**

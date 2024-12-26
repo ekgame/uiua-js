@@ -4,7 +4,7 @@ use js_sys::{Function, JsString, Reflect};
 use uiua::SysBackend;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
-use crate::JsFunctionWrapper;
+use crate::runtime::JsFunctionWrapper;
 
 #[wasm_bindgen]
 #[derive(Default, Clone, Debug)]

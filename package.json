@@ -8,7 +8,7 @@
     "dist": "dist"
   },
   "scripts": {
-    "build": "wasm-pack build --target web crate/",
+    "build": "wasm-pack build --release --target web crate/",
     "dev": "vite"
   },
   "author": "ekgame",

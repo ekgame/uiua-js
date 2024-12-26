@@ -7,9 +7,10 @@ use js_sys::Function;
 use serde::de::Deserializer;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use serde::Deserialize;
+use uiua::encode::SmartOutput;
 use uiua::format::{format_str, FormatConfig, FormatOutput};
 use uiua::{
-    Boxed, CodeSpan, Compiler, Diagnostic, InputSrc, Loc, Span, TraceFrame, Uiua, UiuaError, Value,
+    Boxed, CodeSpan, Compiler, Diagnostic, InputSrc, Loc, SafeSys, Span, TraceFrame, Uiua, UiuaError, Value
 };
 use wasm_bindgen::prelude::*;
 
@@ -847,4 +848,67 @@ pub fn pretty_format_value(value: JsValue) -> Result<String, JsValue> {
     let value: UiuaValue = serde_wasm_bindgen::from_value(value)?;
     let value: Value = value.into();
     Ok(value.show())
+}
+
+enum UiuaSmartOutput {
+    Png(Vec<u8>, Option<String>),
+    Gif(Vec<u8>, Option<String>),
+    Wav(Vec<u8>, Option<String>),
+    Normal(UiuaValue)
+}
+
+impl Serialize for UiuaSmartOutput {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            UiuaSmartOutput::Png(data, label) => {
+                let mut struct_ser = serializer.serialize_struct("UiuaSmartOutput", 2)?;
+                struct_ser.serialize_field("type", &"png")?;
+                struct_ser.serialize_field("data", &data)?;
+                struct_ser.serialize_field("label", &label)?;
+                struct_ser.end()
+            }
+            UiuaSmartOutput::Gif(data, label) => {
+                let mut struct_ser = serializer.serialize_struct("UiuaSmartOutput", 2)?;
+                struct_ser.serialize_field("type", &"gif")?;
+                struct_ser.serialize_field("data", &data)?;
+                struct_ser.serialize_field("label", &label)?;
+                struct_ser.end()
+            }
+            UiuaSmartOutput::Wav(data, label) => {
+                let mut struct_ser = serializer.serialize_struct("UiuaSmartOutput", 2)?;
+                struct_ser.serialize_field("type", &"wav")?;
+                struct_ser.serialize_field("data", &data)?;
+                struct_ser.serialize_field("label", &label)?;
+                struct_ser.end()
+            }
+            UiuaSmartOutput::Normal(value) => {
+                let mut struct_ser = serializer.serialize_struct("UiuaSmartOutput", 2)?;
+                struct_ser.serialize_field("type", &"normal")?;
+                struct_ser.serialize_field("data", &value)?;
+                struct_ser.end()
+            }
+        }
+    }
+}
+
+impl From<SmartOutput> for UiuaSmartOutput {
+    fn from(output: SmartOutput) -> Self {
+        match output {
+            SmartOutput::Png(data, label) => UiuaSmartOutput::Png(data, label),
+            SmartOutput::Gif(data, label) => UiuaSmartOutput::Gif(data, label),
+            SmartOutput::Wav(data, label) => UiuaSmartOutput::Wav(data, label),
+            SmartOutput::Normal(value) => UiuaSmartOutput::Normal(UiuaValue::from(value)),
+            // TODO: Add SVG when that's fixed in Uiua
+        }
+    }
+}
+
+#[wasm_bindgen(js_name = toSmartValue)]
+pub fn to_smart_value(value: JsValue) -> JsValue {
+    let value: UiuaValue = serde_wasm_bindgen::from_value(value).unwrap();
+    let smart_value = SmartOutput::from_value(value.into(), &SafeSys::default());
+    serde_wasm_bindgen::to_value(&UiuaSmartOutput::from(smart_value)).unwrap()
 }

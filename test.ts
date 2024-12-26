@@ -20,11 +20,9 @@ runtime.setBackend(new TestBackend("[test 1]"));
 runtime.setExecutionLimit(5)
 
 const result = runString(runtime, `
-    F ← - @a
-    G ← + 4 F
-    H ← + 5 G
-
-    H 1
+    Music
+    Lena
+    box 5
 `);
 
-console.log(result);
+console.log(result.stack.map(x => x.toSmartValue()));

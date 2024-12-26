@@ -27,6 +27,9 @@ web-sys = { version = "0.3.70", features = [
 uiua = { path = "../../uiua", default-features = false, features = [
     "batteries",
     "web",
+    "audio_encode",
+    "image",
+    "gif"
 ] }
 
 [dev-dependencies]

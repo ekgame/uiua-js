@@ -1,5 +1,6 @@
 import {
     prettyFormatValue,
+    toSmartValue,
 } from "../crate/pkg/uiua_js";
 
 interface UiuaArray<T> extends Array<T | UiuaArray<T>> { }
@@ -34,6 +35,32 @@ interface UiuaValueBox extends UiuaValueBase {
 }
 
 export type UiuaValueModel = UiuaValueNumber | UiuaValueChar | UiuaValueComplex | UiuaValueBox
+
+interface SmartValueBase {
+    type: "png" | "gif" | "wav" | "normal"
+}
+
+interface SmartValuePng extends SmartValueBase {
+    type: "png"
+    data: Uint8Array
+}
+
+interface SmartValueGif extends SmartValueBase {
+    type: "gif"
+    data: Uint8Array
+}
+
+interface SmartValueWav extends SmartValueBase {
+    type: "wav"
+    data: Uint8Array
+}
+
+interface SmartValueNormal extends SmartValueBase {
+    type: "normal"
+    data: UiuaValueModel
+}
+
+export type SmartValue = SmartValuePng | SmartValueGif | SmartValueWav | SmartValueNormal
 
 export class UiuaValue {
     private constructor(
@@ -133,6 +160,19 @@ export class UiuaValue {
 
     prettyFormat(): string {
         return prettyFormatValue(this.toModel());
+    }
+
+    toSmartValue(): SmartValue {
+        const result = toSmartValue(this.toModel());
+        
+        if (result.type === "normal") {
+            return {
+                type: "normal",
+                data: UiuaValue.fromModel(result.data),
+            };
+        }
+
+        return result;
     }
 
     static fromModel(model: UiuaValueModel): UiuaValue {

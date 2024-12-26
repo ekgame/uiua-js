@@ -17,12 +17,13 @@ class TestBackend extends AbstractBackend {
 
 const runtime = new UiuaRuntime();
 runtime.setBackend(new TestBackend("[test 1]"));
+console.log("Running code:");
 const result = runtime.runString(`
     Music
     Lena
-    box 5
 `);
-console.log(result.stack.map(x => x.toSmartValue()));
+console.log(result);
+console.log(result.stack.map(value => value.smartValue()));
 
 // const test = UiuaValue.fromStringArray(["foo", "bar", "baz", "qux"]);
 // console.log(test.toSmartValue());

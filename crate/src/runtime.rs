@@ -6,8 +6,7 @@ use wasm_bindgen::{prelude::wasm_bindgen, JsError, JsValue};
 
 use crate::{
     backend::{self, CustomBackend, ExternalBackendHandlers},
-    formatting::DocumentSpan,
-    value::UiuaValue,
+    formatting::DocumentSpan, value::NativeValueWrapper,
 };
 
 #[wasm_bindgen]
@@ -101,20 +100,18 @@ impl UiuaRef {
         UiuaRef { uiua }
     }
 
-    pub fn pop(&mut self) -> Result<JsValue, JsValue> {
+    pub fn pop(&mut self) -> Result<NativeValueWrapper, JsValue> {
         let uiua = unsafe { &mut *self.uiua };
-        let result = uiua.pop(()).map(|value| UiuaValue::from(value));
+        let result = uiua.pop(());
         match result {
-            Ok(value) => Ok(serde_wasm_bindgen::to_value(&value)?),
+            Ok(value) => Ok(NativeValueWrapper::new(value)),
             Err(err) => Err(to_js_error(err)),
         }
     }
 
-    pub fn push(&mut self, value: JsValue) -> Result<(), JsError> {
+    pub fn push(&mut self, value: NativeValueWrapper) -> Result<(), JsError> {
         let uiua = unsafe { &mut *self.uiua };
-        let value: UiuaValue = serde_wasm_bindgen::from_value(value)?;
-        let value: Value = value.into();
-        uiua.push(value);
+        uiua.push(value.to_value());
         Ok(())
     }
 }
@@ -141,10 +138,10 @@ impl UiuaExecutionResultInternal {
         let values = self
             .stack
             .iter()
-            .map(|value| UiuaValue::from(value.clone()))
-            .collect::<Vec<UiuaValue>>();
+            .map(|value| NativeValueWrapper::new(value.clone()))
+            .collect::<Vec<NativeValueWrapper>>();
 
-        serde_wasm_bindgen::to_value(&values).unwrap()
+        JsValue::from(values)
     }
 
     #[wasm_bindgen(getter)]
@@ -260,7 +257,7 @@ pub fn to_js_error(err: UiuaError) -> JsValue {
 #[wasm_bindgen(js_name = runCode)]
 pub fn run_code(
     code: String,
-    initial_values: Vec<JsValue>,
+    initial_values: Vec<NativeValueWrapper>,
     runtime: UiuaRuntimeInternal,
 ) -> Result<UiuaExecutionResultInternal, JsValue> {
     let mut uiua = Uiua::with_safe_sys();
@@ -302,9 +299,7 @@ pub fn run_code(
     }
 
     initial_values.into_iter().for_each(|value| {
-        let value: UiuaValue = serde_wasm_bindgen::from_value(value).unwrap();
-        let value: Value = value.into();
-        uiua.push(value);
+        uiua.push(value.to_value());
     });
 
     let result = uiua.run_compiler(&mut compiler);

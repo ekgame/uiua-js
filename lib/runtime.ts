@@ -20,11 +20,11 @@ class Uiua {
     }
 
     pop() {
-        return UiuaValue.fromModel(this.ref.pop());
+        return UiuaValue.fromWrapper(this.ref.pop());
     }
 
     push(value: UiuaValue) {
-        this.ref.push(value.toModel());
+        this.ref.push(value.internalWrapper);
     }
 }
 
@@ -103,12 +103,12 @@ export class UiuaRuntime {
     ): UiuaExecutionResult {
         const result = runCode(
             code,
-            initialValues.map(value => value.toModel()),
+            initialValues.map(value => value.internalWrapper),
             this.internal
         );
 
         return {
-            stack: result.stack.map(UiuaValue.fromModel),
+            stack: result.stack.map(UiuaValue.fromWrapper),
             compiler: result.compiler,
             stdout: result.stdout,
             stderr: result.stderr,

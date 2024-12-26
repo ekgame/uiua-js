@@ -1,59 +1,6 @@
 import {
-    prettyFormatValue,
-    toSmartValue,
+    NativeValueWrapper,
 } from "../crate/pkg/uiua_js";
-
-type UiuaArray<T> = T
-    | T[]
-    | T[][]
-    | T[][][]
-    | T[][][][]
-    | T[][][][][]
-    | T[][][][][][]
-    | T[][][][][][][]
-    | T[][][][][][][][]
-    | T[][][][][][][][][]
-    | T[][][][][][][][][][]
-    | T[][][][][][][][][][][]
-    | T[][][][][][][][][][][][]
-    | T[][][][][][][][][][][][][]
-    | T[][][][][][][][][][][][][][]
-    | T[][][][][][][][][][][][][][][]
-    | T[][][][][][][][][][][][][][][][]
-    | T[][][][][][][][][][][][][][][][][]
-    | T[][][][][][][][][][][][][][][][][][]
-    | T[][][][][][][][][][][][][][][][][][][];
-
-type UiuaType = 'number' | 'char' | 'box' | 'complex'
-
-interface UiuaValueBase {
-    type: UiuaType
-    shape: number[]
-    label: string | null
-    keys: UiuaValueModel | null
-}
-
-interface UiuaValueNumber extends UiuaValueBase {
-    type: 'number'
-    data: UiuaArray<number>
-}
-
-interface UiuaValueChar extends UiuaValueBase {
-    type: 'char'
-    data: UiuaArray<string>
-}
-
-interface UiuaValueComplex extends UiuaValueBase {
-    type: 'complex'
-    data: UiuaArray<[number, number]>
-}
-
-interface UiuaValueBox extends UiuaValueBase {
-    type: 'box'
-    data: UiuaArray<UiuaValueModel>
-}
-
-export type UiuaValueModel = UiuaValueNumber | UiuaValueChar | UiuaValueComplex | UiuaValueBox
 
 interface SmartValueBase {
     type: "png" | "gif" | "wav" | "normal"
@@ -76,178 +23,45 @@ interface SmartValueWav extends SmartValueBase {
 
 interface SmartValueNormal extends SmartValueBase {
     type: "normal"
-    data: UiuaValueModel
+    data: NativeValueWrapper
 }
 
 export type SmartValue = SmartValuePng | SmartValueGif | SmartValueWav | SmartValueNormal
 
+type UiuaType = "char" | "number" | "complex" | "box";
+
 export class UiuaValue {
     private constructor(
-        private _model: UiuaValueModel,
-    ) { }
+        private internal: NativeValueWrapper,
+    ) {}
 
-    get data() {
-        return reshapeArray(this._model.data, this._model.shape, this._model.type);
+    get data(): any {
+        let data = this.internal.data();
+        return reshapeArray(data, this.shape, this.type);
     }
 
-    get shape() {
-        return this._model.shape;
+    get shape(): number[] {
+        return Array.from(this.internal.shape());
     }
 
-    get label() {
-        return this._model.label;
+    get type(): UiuaType {
+        return this.internal.type() as any;
     }
 
-    get keys() {
-        return this._model.keys ? UiuaValue.fromModel(this._model.keys) : null;
+    get internalWrapper(): NativeValueWrapper {
+        return this.internal;
     }
 
-    get type() {
-        return this._model.type;
+    show(): string {
+        return this.internal.show();
     }
 
-    box(): UiuaValue {
-        return new UiuaValue({
-            type: "box",
-            data: [this],
-            shape: [],
-            label: null,
-            keys: null,
-        });
+    smartValue(): SmartValue {
+        return this.internal.smartValue();
     }
 
-    unbox(): UiuaValue {
-        if (this.type !== "box") {
-            return this;
-        }
-
-        if (this.shape.length !== 0) {
-            throw new Error("Cannot unbox a non-scalar value");
-        }
-
-        return this.data[0];
-    }
-
-    asNumber(): number {
-        if (this.type !== "number") {
-            throw new Error("Can not convert a nun-number value to a number");
-        }
-
-        if (this.shape.length !== 0) {
-            throw new Error("Can not convert a non-scalar value to a number");
-        }
-
-        return this.data;
-    }
-
-    asNumberArray(): UiuaArray<number> {
-        if (this.type !== "number") {
-            throw new Error("Can not convert a non-number value to a number array");
-        }
-
-        return this.data;
-    }
-
-    asString(): string {
-        if (this.type !== "char") {
-            throw new Error("Can not convert a non-char value to a string");
-        }
-
-        if (this.shape.length !== 1) {
-            throw new Error("Can not convert a non-1D char array to a string");
-        }
-
-        return this.data;
-    }
-
-    toModel(): UiuaValueModel {
-        return this._model;
-    }
-
-    prettyFormat(): string {
-        return prettyFormatValue(this.toModel());
-    }
-
-    toSmartValue(): SmartValue {
-        const result = toSmartValue(this.toModel());
-
-        if (result.type === "normal") {
-            return {
-                type: "normal",
-                data: UiuaValue.fromModel(result.data),
-            };
-        }
-
-        return result;
-    }
-
-    static fromModel(model: UiuaValueModel): UiuaValue {
-        return new UiuaValue(model);
-    }
-
-    static fromNumber(number: number) {
-        return new UiuaValue({
-            type: "number",
-            data: [number],
-            shape: [],
-            label: null,
-            keys: null,
-        });
-    }
-
-    static fromNumberArray(array: UiuaArray<number>) {
-        const shape = getShape(array);
-        if (shape === null) {
-            throw new Error("Invalid shape of the array");
-        }
-
-        return new UiuaValue({
-            type: "number",
-            data: array,
-            shape,
-            label: null,
-            keys: null,
-        });
-    }
-
-    static fromBooleanArray(array: UiuaArray<boolean>) {
-        const shape = getShape(array);
-        if (shape === null) {
-            throw new Error("Invalid shape of the array");
-        }
-
-        return new UiuaValue({
-            type: "number",
-            data: flattenArray(array, "number").map((value) => (value ? 1 : 0)),
-            shape,
-            label: null,
-            keys: null,
-        });
-    }
-
-    static fromString(string: string) {
-        return new UiuaValue({
-            type: "char",
-            data: string,
-            shape: [string.length],
-            label: null,
-            keys: null,
-        });
-    }
-
-    static fromStringArray(array: UiuaArray<string>) {
-        const shape = getShape(array);
-        if (shape === null) {
-            throw new Error("Invalid shape of the array");
-        }
-
-        return new UiuaValue({
-            type: "char",
-            data: flattenArray(array, "char"),
-            shape,
-            label: null,
-            keys: null,
-        });
+    static fromWrapper(internal: NativeValueWrapper): UiuaValue {
+        return new UiuaValue(internal);
     }
 }
 
